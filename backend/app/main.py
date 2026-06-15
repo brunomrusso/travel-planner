@@ -40,6 +40,15 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
+@app.get("/debug")
+async def debug():
+    return {
+        "status": "ok",
+        "backend_url": settings.BACKEND_URL,
+        "frontend_url": settings.FRONTEND_URL,
+        "supabase_configured": bool(settings.SUPABASE_URL),
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
