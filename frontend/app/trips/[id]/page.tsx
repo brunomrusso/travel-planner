@@ -41,6 +41,8 @@ export default function TripDetailPage() {
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState('');
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -92,19 +94,28 @@ export default function TripDetailPage() {
   }, [tripId, router]);
 
   const handleGenerateItinerary = async () => {
+    setIsGenerating(true);
+    setGenerateError('');
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/generate-itinerary`,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers, timeout: 30000 }
       );
-      window.location.reload();
-    } catch (error) {
-      console.error('Error generating itinerary:', error);
+      // Re-fetch itinerary without full page reload
+      const [itineraryRes, attractionsRes] = await Promise.allSettled([
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`, { headers }),
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${trip?.destination_city}`, { headers }),
+      ]);
+      if (itineraryRes.status === 'fulfilled') setItinerary(itineraryRes.value.data);
+      if (attractionsRes.status === 'fulfilled') setAttractions(attractionsRes.value.data);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Error generating itinerary. Please try again.';
+      setGenerateError(msg);
+      console.error('Error generating itinerary:', err);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -167,12 +178,20 @@ export default function TripDetailPage() {
           </div>
 
           {itinerary.length === 0 && (
-            <button
-              onClick={handleGenerateItinerary}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium"
-            >
-              Generate Itinerary
-            </button>
+            <div>
+              {generateError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+                  {generateError}
+                </div>
+              )}
+              <button
+                onClick={handleGenerateItinerary}
+                disabled={isGenerating}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? 'Generating itinerary... (may take up to 30s)' : 'Generate Itinerary'}
+              </button>
+            </div>
           )}
         </div>
 

@@ -4,6 +4,8 @@ from uuid import UUID
 from app.models.trip import Trip, TripCreate, TripUpdate
 from app.database import get_supabase
 from app.services.itinerary_optimizer import ItineraryOptimizer
+from app.services.osm_service import OSMService
+from app.services.sample_attractions import get_sample_attractions
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -88,9 +90,47 @@ async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_f
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
         
         trip = trip_response.data[0]
+        city = trip["destination_city"]
+
+        # Ensure attractions exist in DB, fetch from OSM or use sample data
+        attractions_check = supabase.table("attractions").select("id").eq("city", city).limit(1).execute()
+        if not attractions_check.data:
+            print(f"No attractions in DB for {city}, fetching from OSM...")
+            osm_service = OSMService()
+            osm_attractions = await osm_service.fetch_attractions(city)
+
+            # Fallback to sample data if OSM fails
+            if not osm_attractions:
+                print(f"OSM unavailable, using sample data for {city}")
+                osm_attractions = get_sample_attractions(city)
+
+            for attr in osm_attractions:
+                try:
+                    supabase.table("attractions").insert({
+                        "osm_id": attr.get("osm_id"),
+                        "name": attr["name"],
+                        "category": attr["category"],
+                        "latitude": attr["latitude"],
+                        "longitude": attr["longitude"],
+                        "rating": attr.get("rating", 0),
+                        "visit_duration_minutes": attr.get("visit_duration_minutes", 60),
+                        "city": city
+                    }).execute()
+                except Exception:
+                    pass
+            print(f"Saved {len(osm_attractions)} attractions for {city}")
+
         optimizer = ItineraryOptimizer(supabase)
         itinerary = await optimizer.generate_itinerary(trip_id, trip)
-        
+
+        if not itinerary:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Could not generate itinerary: no attractions found for {city}. Try again in a few seconds."
+            )
+
         return {"message": "Itinerary generated successfully", "itinerary": itinerary}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
