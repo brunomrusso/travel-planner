@@ -121,9 +121,9 @@ export default function TripDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal mx-auto mb-4"></div>
           <p className="text-gray-600">Loading trip details...</p>
         </div>
       </div>
@@ -132,10 +132,10 @@ export default function TripDetailPage() {
 
   if (!trip) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
           <p className="text-gray-600 text-lg">Trip not found</p>
-          <Link href="/trips" className="text-blue-600 hover:text-blue-700 font-medium mt-4 inline-block">
+          <Link href="/trips" className="text-brand-teal hover:text-brand-teal-dark font-medium mt-4 inline-block">
             Back to trips
           </Link>
         </div>
@@ -149,10 +149,10 @@ export default function TripDetailPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
       <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/trips" className="text-blue-600 hover:text-blue-700 font-medium">
+          <Link href="/trips" className="text-brand-teal hover:text-brand-teal-dark font-medium">
             ← Back to trips
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">{trip.destination_city}</h1>
@@ -187,7 +187,7 @@ export default function TripDetailPage() {
               <button
                 onClick={handleGenerateItinerary}
                 disabled={isGenerating}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-brand-orange text-white py-3 rounded-lg hover:bg-brand-orange-dark font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? 'Generating itinerary... (may take up to 30s)' : 'Generate Itinerary'}
               </button>
@@ -210,7 +210,7 @@ export default function TripDetailPage() {
                       const attraction = attractions.find(a => a.id === item.attraction_id);
                       return (
                         <div key={item.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                          <div className="text-2xl font-bold text-blue-600 min-w-fit">{index + 1}.</div>
+                          <div className="text-2xl font-bold text-brand-teal min-w-fit">{index + 1}.</div>
                           <div className="flex-1">
                             <h3 className="font-bold text-gray-900">{attraction?.name}</h3>
                             <p className="text-sm text-gray-600">

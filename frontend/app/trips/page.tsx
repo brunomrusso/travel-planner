@@ -77,9 +77,9 @@ export default function TripsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal mx-auto mb-4"></div>
           <p className="text-gray-600">Loading trips...</p>
         </div>
       </div>
@@ -87,10 +87,10 @@ export default function TripsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <nav className="bg-white shadow-md">
+    <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
+      <nav className="bg-white shadow-md border-b-4 border-brand-teal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">✈️ Travel Planner</h1>
+          <h1 className="text-2xl font-bold text-brand-teal">✈️ Travel Planner</h1>
           <button
             onClick={handleLogout}
             className="text-gray-600 hover:text-red-600 font-medium"
@@ -105,7 +105,7 @@ export default function TripsPage() {
           <h2 className="text-3xl font-bold text-gray-900">My Trips</h2>
           <Link
             href="/trips/new"
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"
+            className="bg-brand-orange text-white px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium"
           >
             + New Trip
           </Link>
@@ -118,7 +118,7 @@ export default function TripsPage() {
             <p className="text-gray-600 mb-6">Create your first trip to get started planning!</p>
             <Link
               href="/trips/new"
-              className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"
+              className="inline-block bg-brand-orange text-white px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium"
             >
               Create Trip
             </Link>
@@ -127,7 +127,7 @@ export default function TripsPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {trips.map((trip) => (
               <div key={trip.id} className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-32"></div>
+                <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark h-32"></div>
                 <div className="p-6">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{trip.destination_city}</h3>
                   <p className="text-gray-600 mb-1">
@@ -139,7 +139,7 @@ export default function TripsPage() {
                   <div className="flex gap-2">
                     <Link
                       href={`/trips/${trip.id}`}
-                      className="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-center hover:bg-blue-700 font-medium"
+                      className="flex-1 bg-brand-teal text-white px-4 py-2 rounded text-center hover:bg-brand-teal-dark font-medium"
                     >
                       View
                     </Link>

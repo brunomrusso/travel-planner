@@ -64,7 +64,7 @@ export default function NewTripPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white py-8">
       <div className="max-w-2xl mx-auto px-4">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Create New Trip</h1>
 
@@ -82,7 +82,7 @@ export default function NewTripPage() {
               name="destination_city"
               value={formData.destination_city}
               onChange={handleInputChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-teal focus:border-brand-teal"
               placeholder="e.g., Paris, Tokyo, Barcelona"
               required
             />
@@ -96,7 +96,7 @@ export default function NewTripPage() {
                 name="start_date"
                 value={formData.start_date}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-teal focus:border-brand-teal"
                 required
               />
             </div>
@@ -107,7 +107,7 @@ export default function NewTripPage() {
                 name="end_date"
                 value={formData.end_date}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-teal focus:border-brand-teal"
                 required
               />
             </div>
@@ -123,8 +123,8 @@ export default function NewTripPage() {
                   onClick={() => handleProfileSelect(profile.value)}
                   className={`p-4 rounded-lg border-2 text-left transition ${
                     formData.traveler_profile === profile.value
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-blue-300'
+                      ? 'border-brand-teal bg-brand-teal-light'
+                      : 'border-gray-200 hover:border-brand-teal'
                   }`}
                 >
                   <div className="font-medium text-gray-900">{profile.label}</div>
@@ -137,7 +137,7 @@ export default function NewTripPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-brand-orange text-white py-3 rounded-lg hover:bg-brand-orange-dark font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Creating trip...' : 'Create Trip'}
           </button>

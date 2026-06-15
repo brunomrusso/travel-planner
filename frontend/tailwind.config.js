@@ -7,8 +7,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#3B82F6',
-        secondary: '#10B981',
+        brand: {
+          teal: '#19A6A6',
+          'teal-dark': '#137f7f',
+          'teal-light': '#e6f7f7',
+          orange: '#E8491B',
+          'orange-dark': '#c03a14',
+          'orange-light': '#fdf0ec',
+          black: '#000000',
+        },
+      },
+      fontFamily: {
+        sans: ['Work Sans', 'sans-serif'],
       },
     },
   },
