@@ -1,5 +1,6 @@
 -- Fix: Add INSERT policy for profiles (was missing)
-CREATE POLICY IF NOT EXISTS "Users can insert own profile" ON profiles
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile" ON profiles
     FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Fix: Auto-create profile when user signs up
