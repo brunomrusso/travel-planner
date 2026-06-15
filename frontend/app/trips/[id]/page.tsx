@@ -23,6 +23,21 @@ const PROFILE_PT: Record<string, string> = {
   relax: '🏖️ Relaxamento', family: '👨‍👩‍👧‍👦 Família',
 };
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function getTransport(distKm: number) {
+  if (distKm < 1.0) return { icon: '🚶', label: 'A pé', speedKmh: 5, color: 'text-green-700 bg-green-50 border-green-200' };
+  if (distKm < 3.5) return { icon: '🚌', label: 'Transporte público', speedKmh: 20, color: 'text-blue-700 bg-blue-50 border-blue-200' };
+  return { icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, color: 'text-orange-700 bg-orange-50 border-orange-200' };
+}
+
 interface Attraction {
   id: string;
   name: string;
@@ -219,17 +234,18 @@ export default function TripDetailPage() {
           </div>
         )}
 
-        {/* Botão gerar roteiro */}
-        {itinerary.length === 0 && (
+        {/* Botão gerar / regenerar roteiro */}
+        {generateError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+            {generateError}
+          </div>
+        )}
+
+        {itinerary.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-8 mb-8 text-center">
             <div className="text-6xl mb-4">🗺️</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu roteiro está pronto para ser criado!</h2>
             <p className="text-gray-500 mb-6">Vamos montar um itinerário personalizado para {trip.destination_city} com base no seu perfil de viagem.</p>
-            {generateError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-                {generateError}
-              </div>
-            )}
             <button
               onClick={handleGenerateItinerary}
               disabled={isGenerating}
@@ -241,6 +257,21 @@ export default function TripDetailPage() {
                   Gerando roteiro... (pode levar até 30s)
                 </>
               ) : '✨ Gerar Roteiro'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleGenerateItinerary}
+              disabled={isGenerating}
+              className="text-sm text-gray-500 hover:text-brand-orange border border-gray-300 hover:border-brand-orange px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
+                  Regenerando...
+                </>
+              ) : '🔄 Regenerar Roteiro'}
             </button>
           </div>
         )}
@@ -271,12 +302,15 @@ export default function TripDetailPage() {
                     </div>
                   </div>
 
-                  <div className="divide-y divide-gray-100">
+                  <div>
                     {dayItems.length === 0 ? (
                       <p className="text-gray-500 p-6 text-center">Nenhuma atividade planejada para este dia</p>
                     ) : (
                       dayItems.map((item, index) => {
                         const attraction = attractions.find(a => a.id === item.attraction_id);
+                        const nextItem = dayItems[index + 1];
+                        const nextAttraction = nextItem ? attractions.find(a => a.id === nextItem.attraction_id) : null;
+
                         const icon = CATEGORY_ICONS[attraction?.category || ''] || '📍';
                         const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || '';
                         const durationH = attraction ? Math.floor(attraction.visit_duration_minutes / 60) : 0;
@@ -285,21 +319,43 @@ export default function TripDetailPage() {
                           ? `${durationH}h${durationM > 0 ? durationM + 'min' : ''}`
                           : `${durationM}min`;
 
+                        let travelConnector = null;
+                        if (attraction && nextAttraction) {
+                          const distKm = haversineKm(attraction.latitude, attraction.longitude, nextAttraction.latitude, nextAttraction.longitude);
+                          const transport = getTransport(distKm);
+                          const travelMin = Math.round((distKm / transport.speedKmh) * 60);
+                          travelConnector = (
+                            <div className="flex items-center gap-2 px-5 py-2 border-l-2 border-dashed border-gray-200 ml-[28px]">
+                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${transport.color}`}>
+                                <span>{transport.icon}</span>
+                                <span>{transport.label}</span>
+                                <span className="text-gray-400">•</span>
+                                <span>{distKm.toFixed(1)} km</span>
+                                <span className="text-gray-400">•</span>
+                                <span>~{travelMin} min</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div key={item.id} className="flex items-center gap-4 p-5 hover:bg-gray-50 transition">
-                            <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
-                              {index + 1}
+                          <div key={item.id}>
+                            <div className="flex items-center gap-4 p-5 hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
+                              <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
+                                {index + 1}
+                              </div>
+                              <div className="text-2xl flex-shrink-0">{icon}</div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-900 truncate">{attraction?.name || 'Atração'}</h4>
+                                <p className="text-sm text-gray-500">{categoryPt}</p>
+                              </div>
+                              <div className="flex-shrink-0 text-right">
+                                <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                                  ⏱ {durationStr}
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-2xl flex-shrink-0">{icon}</div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-gray-900 truncate">{attraction?.name || 'Atração'}</h4>
-                              <p className="text-sm text-gray-500">{categoryPt}</p>
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                                ⏱ {durationStr}
-                              </span>
-                            </div>
+                            {travelConnector}
                           </div>
                         );
                       })

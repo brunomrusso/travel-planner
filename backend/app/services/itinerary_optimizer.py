@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from uuid import UUID
 from app.services.osrm_service import OSRMService
+from collections import defaultdict
 import math
 
 class ItineraryOptimizer:
@@ -52,24 +53,25 @@ class ItineraryOptimizer:
         return sorted(scored, key=lambda x: x["score"], reverse=True)
     
     def _distribute_attractions_by_day(self, attractions: List[Dict[str, Any]], num_days: int) -> List[Dict[str, Any]]:
+        if not attractions or num_days <= 0:
+            return []
+
         itinerary = []
-        attractions_per_day = len(attractions) // num_days if num_days > 0 else 0
-        
-        for day in range(1, num_days + 1):
-            start_idx = (day - 1) * attractions_per_day
-            end_idx = start_idx + attractions_per_day if day < num_days else len(attractions)
-            
-            day_attractions = attractions[start_idx:end_idx]
-            
-            for order, attraction in enumerate(day_attractions, 1):
-                itinerary.append({
-                    "day_number": day,
-                    "order_in_day": order,
-                    "attraction": attraction,
-                    "start_time": None,
-                    "notes": ""
-                })
-        
+        day_order = defaultdict(int)
+
+        # Round-robin: attraction i goes to day (i % num_days) + 1
+        # Correctly handles cases where len(attractions) < num_days
+        for i, attraction in enumerate(attractions):
+            day_number = (i % num_days) + 1
+            day_order[day_number] += 1
+            itinerary.append({
+                "day_number": day_number,
+                "order_in_day": day_order[day_number],
+                "attraction": attraction,
+                "start_time": None,
+                "notes": ""
+            })
+
         return itinerary
     
     async def _optimize_daily_routes(self, itinerary: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -127,7 +129,19 @@ class ItineraryOptimizer:
         
         return R * c
     
+    def _get_transport(self, distance_km: float) -> Dict[str, Any]:
+        """Return best transport mode and estimated travel time for a given distance."""
+        if distance_km < 1.0:
+            return {"mode": "walking", "label": "A pé", "icon": "🚶", "speed_kmh": 5}
+        elif distance_km < 3.5:
+            return {"mode": "transit", "label": "Transporte público", "icon": "🚌", "speed_kmh": 20}
+        else:
+            return {"mode": "taxi", "label": "Táxi / Uber", "icon": "🚕", "speed_kmh": 25}
+
     def _save_itinerary_to_db(self, trip_id: UUID, itinerary: List[Dict[str, Any]]):
+        # Delete any existing itinerary for this trip before saving
+        self.supabase.table("itineraries").delete().eq("trip_id", str(trip_id)).execute()
+
         for item in itinerary:
             self.supabase.table("itineraries").insert({
                 "trip_id": str(trip_id),
