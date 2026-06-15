@@ -31,26 +31,31 @@ class OSMService:
         "gallery": 90,
     }
     
-    async def fetch_attractions(self, city: str) -> List[Dict[str, Any]]:
+    async def fetch_attractions(self, city: str, timeout_seconds: int = 15) -> List[Dict[str, Any]]:
+        try:
+            return await asyncio.wait_for(
+                self._fetch_attractions_internal(city),
+                timeout=timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            print(f"Timeout fetching attractions for {city} after {timeout_seconds}s")
+            return []
+        except Exception as e:
+            print(f"Error fetching attractions: {e}")
+            return []
+
+    async def _fetch_attractions_internal(self, city: str) -> List[Dict[str, Any]]:
         attractions = []
-        
+
+        geocoded = await self._geocode_city(city)
+        if not geocoded:
+            return []
+
+        bbox = geocoded["bbox"]
+
         for category, tags in self.CATEGORY_MAPPING.items():
             for tag in tags:
                 try:
-                    query = f"""
-                    [bbox:0,0,0,0];
-                    (
-                        node[{tag}](area.searchArea);
-                        way[{tag}](area.searchArea);
-                    );
-                    out center;
-                    """
-                    
-                    geocoded = await self._geocode_city(city)
-                    if not geocoded:
-                        continue
-                    
-                    bbox = geocoded["bbox"]
                     query = f"""
                     [bbox:{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}];
                     (
@@ -59,17 +64,14 @@ class OSMService:
                     );
                     out center;
                     """
-                    
                     async with httpx.AsyncClient() as client:
-                        response = await client.post(self.OVERPASS_API, data=query, timeout=30.0)
-                        
+                        response = await client.post(self.OVERPASS_API, data=query, timeout=8.0)
                         if response.status_code == 200:
                             data = response.json()
                             for element in data.get("elements", []):
                                 if "tags" in element and "name" in element["tags"]:
                                     lat = element.get("lat") or element.get("center", {}).get("lat")
                                     lon = element.get("lon") or element.get("center", {}).get("lon")
-                                    
                                     if lat and lon:
                                         attractions.append({
                                             "osm_id": element.get("id"),
@@ -83,7 +85,7 @@ class OSMService:
                 except Exception as e:
                     print(f"Error fetching {category} from {tag}: {e}")
                     continue
-        
+
         return attractions[:50]
     
     async def _geocode_city(self, city: str) -> Dict[str, Any]:

@@ -55,35 +55,32 @@ export default function TripDetailPage() {
       setToken(data.session.access_token);
 
       try {
+        const headers = { Authorization: `Bearer ${data.session.access_token}` };
+
         const tripResponse = await axios.get(
           `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-            },
-          }
+          { headers }
         );
         setTrip(tripResponse.data);
+        setIsLoading(false);
 
-        const attractionsResponse = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${tripResponse.data.destination_city}`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-            },
-          }
-        );
-        setAttractions(attractionsResponse.data);
+        const [attractionsResponse, itineraryResponse] = await Promise.allSettled([
+          axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${tripResponse.data.destination_city}`,
+            { headers, timeout: 20000 }
+          ),
+          axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
+            { headers }
+          ),
+        ]);
 
-        const itineraryResponse = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-            },
-          }
-        );
-        setItinerary(itineraryResponse.data);
+        if (attractionsResponse.status === 'fulfilled') {
+          setAttractions(attractionsResponse.value.data);
+        }
+        if (itineraryResponse.status === 'fulfilled') {
+          setItinerary(itineraryResponse.value.data);
+        }
       } catch (error) {
         console.error('Error loading trip data:', error);
       } finally {
