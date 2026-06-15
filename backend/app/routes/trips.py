@@ -33,9 +33,13 @@ async def list_trips(user_id: str = Depends(get_user_id_from_token)):
 async def create_trip(trip: TripCreate, user_id: str = Depends(get_user_id_from_token)):
     supabase = get_supabase()
     try:
+        destinations = [d.model_dump() for d in (trip.destinations or [])]
+        if not destinations:
+            destinations = [{"city": trip.destination_city, "country": "", "country_code": ""}]
         response = supabase.table("trips").insert({
             "user_id": user_id,
             "destination_city": trip.destination_city,
+            "destinations": destinations,
             "start_date": trip.start_date.isoformat(),
             "end_date": trip.end_date.isoformat(),
             "traveler_profile": trip.traveler_profile
@@ -81,6 +85,35 @@ async def delete_trip(trip_id: UUID, user_id: str = Depends(get_user_id_from_tok
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+async def _ensure_attractions_for_city(city: str, supabase) -> int:
+    check = supabase.table("attractions").select("id").eq("city", city).limit(1).execute()
+    if check.data:
+        return 0
+    print(f"No attractions for '{city}', fetching...")
+    osm_service = OSMService()
+    osm_attrs = await osm_service.fetch_attractions(city)
+    if not osm_attrs:
+        print(f"OSM unavailable, using sample data for '{city}'")
+        osm_attrs = get_sample_attractions(city)
+    saved = 0
+    for attr in osm_attrs:
+        try:
+            supabase.table("attractions").insert({
+                "osm_id": attr.get("osm_id"),
+                "name": attr["name"],
+                "category": attr["category"],
+                "latitude": attr["latitude"],
+                "longitude": attr["longitude"],
+                "rating": attr.get("rating", 0),
+                "visit_duration_minutes": attr.get("visit_duration_minutes", 60),
+                "city": city
+            }).execute()
+            saved += 1
+        except Exception:
+            pass
+    print(f"Saved {saved} attractions for '{city}'")
+    return saved
+
 @router.post("/{trip_id}/generate-itinerary")
 async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
     supabase = get_supabase()
@@ -88,45 +121,24 @@ async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_f
         trip_response = supabase.table("trips").select("*").eq("id", str(trip_id)).eq("user_id", user_id).execute()
         if not trip_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-        
+
         trip = trip_response.data[0]
-        city = trip["destination_city"]
+        destinations = trip.get("destinations") or []
+        if not destinations:
+            destinations = [{"city": trip["destination_city"], "country": "", "country_code": ""}]
 
-        # Ensure attractions exist in DB, fetch from OSM or use sample data
-        attractions_check = supabase.table("attractions").select("id").eq("city", city).limit(1).execute()
-        if not attractions_check.data:
-            print(f"No attractions in DB for {city}, fetching from OSM...")
-            osm_service = OSMService()
-            osm_attractions = await osm_service.fetch_attractions(city)
-
-            # Fallback to sample data if OSM fails
-            if not osm_attractions:
-                print(f"OSM unavailable, using sample data for {city}")
-                osm_attractions = get_sample_attractions(city)
-
-            for attr in osm_attractions:
-                try:
-                    supabase.table("attractions").insert({
-                        "osm_id": attr.get("osm_id"),
-                        "name": attr["name"],
-                        "category": attr["category"],
-                        "latitude": attr["latitude"],
-                        "longitude": attr["longitude"],
-                        "rating": attr.get("rating", 0),
-                        "visit_duration_minutes": attr.get("visit_duration_minutes", 60),
-                        "city": city
-                    }).execute()
-                except Exception:
-                    pass
-            print(f"Saved {len(osm_attractions)} attractions for {city}")
+        # Ensure attractions exist for ALL cities
+        for dest in destinations:
+            await _ensure_attractions_for_city(dest["city"], supabase)
 
         optimizer = ItineraryOptimizer(supabase)
         itinerary = await optimizer.generate_itinerary(trip_id, trip)
 
         if not itinerary:
+            cities = ", ".join(d["city"] for d in destinations)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Could not generate itinerary: no attractions found for {city}. Try again in a few seconds."
+                detail=f"Não foi possível gerar roteiro: nenhuma atração encontrada para {cities}. Tente novamente."
             )
 
         return {"message": "Itinerary generated successfully", "itinerary": itinerary}

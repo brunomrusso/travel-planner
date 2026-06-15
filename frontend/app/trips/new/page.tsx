@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
@@ -16,106 +16,120 @@ const TRAVELER_PROFILES = [
 
 interface CityOption {
   display_name: string;
-  address?: { country?: string; city?: string; town?: string; village?: string };
+  address?: { country?: string; city?: string; town?: string; village?: string; country_code?: string };
+}
+
+interface DestEntry {
+  city: string;
+  country: string;
+  country_code: string;
+  query: string;
+  valid: boolean | null;
+  suggestions: CityOption[];
+  showSuggestions: boolean;
+  isSearching: boolean;
+}
+
+const emptyDest = (): DestEntry => ({
+  city: '', country: '', country_code: '', query: '',
+  valid: null, suggestions: [], showSuggestions: false, isSearching: false,
+});
+
+function getFlagEmoji(code: string): string {
+  if (!code || code.length !== 2) return '🌍';
+  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
 export default function NewTripPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    destination_city: '',
-    start_date: '',
-    end_date: '',
-    traveler_profile: 'cultural',
-  });
-  const [cityQuery, setCityQuery] = useState('');
-  const [citySuggestions, setCitySuggestions] = useState<CityOption[]>([]);
-  const [cityValid, setCityValid] = useState<boolean | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [destinations, setDestinations] = useState<DestEntry[]>([emptyDest()]);
+  const [formData, setFormData] = useState({ start_date: '', end_date: '', traveler_profile: 'cultural' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const debounceRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
+      setDestinations(prev => prev.map((d, i) => {
+        if (dropdownRefs.current[i] && !dropdownRefs.current[i]!.contains(e.target as Node)) {
+          return { ...d, showSuggestions: false };
+        }
+        return d;
+      }));
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const searchCities = async (query: string) => {
+  const searchCities = async (idx: number, query: string) => {
     if (query.length < 2) {
-      setCitySuggestions([]);
-      setCityValid(null);
+      setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, suggestions: [], valid: null, isSearching: false } : d));
       return;
     }
-    setIsSearching(true);
+    setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, isSearching: true } : d));
     try {
       const res = await axios.get('https://nominatim.openstreetmap.org/search', {
         params: { q: query, format: 'json', limit: 5, featuretype: 'city', addressdetails: 1 },
         headers: { 'Accept-Language': 'pt-BR' },
         timeout: 5000,
       });
-      setCitySuggestions(res.data);
-      setShowSuggestions(res.data.length > 0);
-      if (res.data.length === 0) setCityValid(false);
+      setDestinations(prev => prev.map((d, i) => i === idx
+        ? { ...d, suggestions: res.data, showSuggestions: res.data.length > 0, valid: res.data.length === 0 ? false : null, isSearching: false }
+        : d
+      ));
     } catch {
-      // ignorar silenciosamente
-    } finally {
-      setIsSearching(false);
+      setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, isSearching: false } : d));
     }
   };
 
-  const handleCityInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setCityQuery(val);
-    setCityValid(null);
-    setFormData(prev => ({ ...prev, destination_city: val }));
-    clearTimeout(debounceRef.current);
+  const handleCityInput = (idx: number, val: string) => {
+    setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, query: val, city: val, valid: null } : d));
+    clearTimeout(debounceRefs.current[idx]);
     if (val.length >= 2) {
-      debounceRef.current = setTimeout(() => searchCities(val), 400);
+      debounceRefs.current[idx] = setTimeout(() => searchCities(idx, val), 400);
     } else {
-      setCitySuggestions([]);
-      setShowSuggestions(false);
+      setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, suggestions: [], showSuggestions: false } : d));
     }
   };
 
-  const handleSelectCity = (city: CityOption) => {
+  const handleSelectCity = (idx: number, city: CityOption) => {
     const name = city.address?.city || city.address?.town || city.address?.village || city.display_name.split(',')[0];
-    setCityQuery(name);
-    setFormData(prev => ({ ...prev, destination_city: name }));
-    setCityValid(true);
-    setShowSuggestions(false);
-    setCitySuggestions([]);
+    const country = city.address?.country || '';
+    const country_code = city.address?.country_code || '';
+    setDestinations(prev => prev.map((d, i) => i === idx
+      ? { ...d, city: name, country, country_code, query: name, valid: true, suggestions: [], showSuggestions: false }
+      : d
+    ));
   };
+
+  const addDestination = () => setDestinations(prev => [...prev, emptyDest()]);
+  const removeDestination = (idx: number) => setDestinations(prev => prev.filter((_, i) => i !== idx));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleProfileSelect = (profile: string) => {
-    setFormData(prev => ({ ...prev, traveler_profile: profile }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cityValid !== true) {
-      setError('Selecione um destino válido da lista de sugestões.');
-      return;
-    }
+    const invalid = destinations.find(d => d.valid !== true);
+    if (invalid) { setError('Confirme todos os destinos na lista de sugestões.'); return; }
     setError('');
     setIsLoading(true);
     try {
       const { data } = await getSession();
       if (!data?.session) { router.push('/login'); return; }
+      const destList = destinations.map(d => ({ city: d.city, country: d.country, country_code: d.country_code }));
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/`,
-        formData,
+        {
+          destination_city: destinations[0].city,
+          destinations: destList,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          traveler_profile: formData.traveler_profile,
+        },
         { headers: { Authorization: `Bearer ${data.session.access_token}` } }
       );
       router.push(`/trips/${response.data.id}`);
@@ -137,117 +151,132 @@ export default function NewTripPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-            {error}
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">{error}</div>
         )}
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-xl p-8 space-y-6">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">🌍 Destino</label>
-            <div className="relative" ref={dropdownRef}>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={cityQuery}
-                  onChange={handleCityInput}
-                  onFocus={() => citySuggestions.length > 0 && setShowSuggestions(true)}
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition pr-10 ${
-                    cityValid === true
-                      ? 'border-brand-teal bg-brand-teal-light'
-                      : cityValid === false
-                      ? 'border-red-400 bg-red-50'
-                      : 'border-gray-300 focus:border-brand-teal'
-                  }`}
-                  placeholder="Ex: Paris, Tóquio, Buenos Aires..."
-                  autoComplete="off"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {isSearching ? (
-                    <span className="inline-block w-5 h-5 border-2 border-brand-teal border-t-transparent rounded-full animate-spin" />
-                  ) : cityValid === true ? (
-                    <span className="text-brand-teal text-xl font-bold">✓</span>
-                  ) : cityValid === false ? (
-                    <span className="text-red-500 text-xl">✗</span>
-                  ) : null}
-                </div>
-              </div>
 
-              {showSuggestions && citySuggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
-                  {citySuggestions.map((city, i) => {
-                    const name = city.address?.city || city.address?.town || city.address?.village || city.display_name.split(',')[0];
-                    const country = city.address?.country || '';
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onMouseDown={() => handleSelectCity(city)}
-                        className="w-full px-4 py-3 text-left hover:bg-brand-teal-light flex items-center gap-3 border-b border-gray-100 last:border-0 transition"
-                      >
-                        <span className="text-xl">📍</span>
-                        <div>
-                          <p className="font-semibold text-gray-900">{name}</p>
-                          <p className="text-sm text-gray-500">{country}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+          {/* Destinos */}
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <label className="block text-gray-700 font-semibold">🌍 Destinos</label>
+              {destinations.length < 5 && (
+                <button type="button" onClick={addDestination}
+                  className="text-sm text-brand-teal hover:text-brand-teal-dark font-medium flex items-center gap-1 border border-brand-teal px-3 py-1 rounded-lg transition">
+                  + Adicionar cidade
+                </button>
               )}
             </div>
-            {cityValid === true && (
-              <p className="text-brand-teal text-sm mt-1 font-medium">✓ Destino confirmado</p>
-            )}
-            {cityQuery.length >= 2 && !isSearching && citySuggestions.length === 0 && cityValid === null && (
-              <p className="text-amber-600 text-sm mt-1">⚠ Nenhuma cidade encontrada. Verifique a grafia.</p>
-            )}
-            {cityValid === false && (
-              <p className="text-red-500 text-sm mt-1">Cidade não encontrada. Tente outro nome.</p>
+
+            <div className="space-y-3">
+              {destinations.map((dest, idx) => (
+                <div key={idx} className="relative" ref={el => { dropdownRefs.current[idx] = el; }}>
+                  <div className="flex items-center gap-2">
+                    {destinations.length > 1 && (
+                      <span className="flex-shrink-0 w-6 h-6 bg-brand-teal text-white rounded-full flex items-center justify-center text-xs font-bold">
+                        {idx + 1}
+                      </span>
+                    )}
+                    <div className="relative flex-1">
+                      <div className="relative">
+                        {dest.valid && dest.country_code && (
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl select-none">
+                            {getFlagEmoji(dest.country_code)}
+                          </span>
+                        )}
+                        <input
+                          type="text"
+                          value={dest.query}
+                          onChange={e => handleCityInput(idx, e.target.value)}
+                          onFocus={() => dest.suggestions.length > 0 && setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, showSuggestions: true } : d))}
+                          className={`w-full py-3 border-2 rounded-lg focus:outline-none transition pr-10 ${dest.valid && dest.country_code ? 'pl-10' : 'pl-4'} ${
+                            dest.valid === true ? 'border-brand-teal bg-brand-teal-light'
+                            : dest.valid === false ? 'border-red-400 bg-red-50'
+                            : 'border-gray-300 focus:border-brand-teal'
+                          }`}
+                          placeholder={idx === 0 ? 'Ex: Paris, Tóquio...' : 'Próxima cidade...'}
+                          autoComplete="off"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {dest.isSearching
+                            ? <span className="inline-block w-4 h-4 border-2 border-brand-teal border-t-transparent rounded-full animate-spin" />
+                            : dest.valid === true ? <span className="text-brand-teal font-bold">✓</span>
+                            : dest.valid === false ? <span className="text-red-500">✗</span>
+                            : null}
+                        </div>
+                      </div>
+
+                      {dest.showSuggestions && dest.suggestions.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
+                          {dest.suggestions.map((city, si) => {
+                            const name = city.address?.city || city.address?.town || city.address?.village || city.display_name.split(',')[0];
+                            const country = city.address?.country || '';
+                            const cc = city.address?.country_code || '';
+                            return (
+                              <button key={si} type="button"
+                                onMouseDown={() => handleSelectCity(idx, city)}
+                                className="w-full px-4 py-3 text-left hover:bg-brand-teal-light flex items-center gap-3 border-b border-gray-100 last:border-0 transition">
+                                <span className="text-xl">{getFlagEmoji(cc)}</span>
+                                <div>
+                                  <p className="font-semibold text-gray-900">{name}</p>
+                                  <p className="text-sm text-gray-500">{country}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {idx > 0 && (
+                      <button type="button" onClick={() => removeDestination(idx)}
+                        className="flex-shrink-0 text-gray-400 hover:text-red-500 transition text-xl leading-none">×</button>
+                    )}
+                  </div>
+                  {dest.valid === true && dest.country && (
+                    <p className="text-brand-teal text-xs mt-1 ml-8 font-medium">
+                      ✓ {getFlagEmoji(dest.country_code)} {dest.city}, {dest.country}
+                    </p>
+                  )}
+                  {dest.query.length >= 2 && !dest.isSearching && dest.suggestions.length === 0 && dest.valid === null && (
+                    <p className="text-amber-600 text-xs mt-1 ml-8">⚠ Nenhuma cidade encontrada</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {destinations.length > 1 && (
+              <p className="text-xs text-gray-400 mt-2">Os dias serão divididos igualmente entre as cidades.</p>
             )}
           </div>
 
+          {/* Datas */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-gray-700 font-semibold mb-2">📅 Data de Início</label>
-              <input
-                type="date"
-                name="start_date"
-                value={formData.start_date}
-                onChange={handleInputChange}
-                min={today}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-brand-teal transition"
-                required
-              />
+              <input type="date" name="start_date" value={formData.start_date}
+                onChange={handleInputChange} min={today}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-brand-teal transition" required />
             </div>
             <div>
               <label className="block text-gray-700 font-semibold mb-2">📅 Data de Retorno</label>
-              <input
-                type="date"
-                name="end_date"
-                value={formData.end_date}
-                onChange={handleInputChange}
-                min={formData.start_date || today}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-brand-teal transition"
-                required
-              />
+              <input type="date" name="end_date" value={formData.end_date}
+                onChange={handleInputChange} min={formData.start_date || today}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-brand-teal transition" required />
             </div>
           </div>
 
+          {/* Perfil */}
           <div>
             <label className="block text-gray-700 font-semibold mb-3">🎯 Perfil do Viajante</label>
             <div className="grid grid-cols-2 gap-3">
               {TRAVELER_PROFILES.map(profile => (
-                <button
-                  key={profile.value}
-                  type="button"
-                  onClick={() => handleProfileSelect(profile.value)}
+                <button key={profile.value} type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, traveler_profile: profile.value }))}
                   className={`p-4 rounded-xl border-2 text-left transition ${
                     formData.traveler_profile === profile.value
                       ? 'border-brand-teal bg-brand-teal-light shadow-md'
                       : 'border-gray-200 hover:border-brand-teal hover:bg-gray-50'
-                  }`}
-                >
+                  }`}>
                   <div className="font-semibold text-gray-900">{profile.label}</div>
                   <div className="text-sm text-gray-500 mt-1">{profile.description}</div>
                 </button>
@@ -255,12 +284,9 @@ export default function NewTripPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-brand-orange text-white py-4 rounded-xl hover:bg-brand-orange-dark font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {isLoading ? 'Criando viagem...' : '✈️ Criar Viagem'}
+          <button type="submit" disabled={isLoading}
+            className="w-full bg-brand-orange text-white py-4 rounded-xl hover:bg-brand-orange-dark font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition">
+            {isLoading ? 'Criando viagem...' : `✈️ Criar Viagem ${destinations.length > 1 ? `(${destinations.length} destinos)` : ''}`}
           </button>
         </form>
       </div>

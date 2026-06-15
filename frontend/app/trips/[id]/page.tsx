@@ -38,10 +38,13 @@ function getTransport(distKm: number) {
   return { icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, color: 'text-orange-700 bg-orange-50 border-orange-200' };
 }
 
+interface DestinationCity { city: string; country: string; country_code: string; }
+
 interface Attraction {
   id: string;
   name: string;
   category: string;
+  city: string;
   latitude: number;
   longitude: number;
   visit_duration_minutes: number;
@@ -59,9 +62,15 @@ interface ItineraryItem {
 interface Trip {
   id: string;
   destination_city: string;
+  destinations: DestinationCity[];
   start_date: string;
   end_date: string;
   traveler_profile: string;
+}
+
+function getFlagEmoji(code: string): string {
+  if (!code || code.length !== 2) return '🌍';
+  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
 export default function TripDetailPage() {
@@ -98,23 +107,18 @@ export default function TripDetailPage() {
         setTrip(tripResponse.data);
         setIsLoading(false);
 
-        const [attractionsResponse, itineraryResponse] = await Promise.allSettled([
-          axios.get(
-            `${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${tripResponse.data.destination_city}`,
-            { headers, timeout: 20000 }
-          ),
-          axios.get(
-            `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
-            { headers }
-          ),
+        const tripDests: DestinationCity[] = tripResponse.data.destinations || [{ city: tripResponse.data.destination_city, country: '', country_code: '' }];
+        const [itineraryResponse, ...attrResponses] = await Promise.allSettled([
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`, { headers }),
+          ...tripDests.map(d => axios.get(`${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${encodeURIComponent(d.city)}`, { headers, timeout: 20000 })),
         ]);
 
-        if (attractionsResponse.status === 'fulfilled') {
-          setAttractions(attractionsResponse.value.data);
+        const allAttractions: Attraction[] = [];
+        for (const r of attrResponses) {
+          if (r.status === 'fulfilled') allAttractions.push(...r.value.data);
         }
-        if (itineraryResponse.status === 'fulfilled') {
-          setItinerary(itineraryResponse.value.data);
-        }
+        setAttractions(allAttractions);
+        if (itineraryResponse.status === 'fulfilled') setItinerary(itineraryResponse.value.data);
       } catch (error) {
         console.error('Error loading trip data:', error);
       } finally {
@@ -200,7 +204,19 @@ export default function TripDetailPage() {
           </Link>
         </div>
         <div className="absolute bottom-6 left-6 right-6">
-          <h1 className="text-5xl font-bold text-white drop-shadow-lg">{trip.destination_city}</h1>
+          {trip.destinations && trip.destinations.length > 1 ? (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {trip.destinations.map((d, i) => (
+                <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-xl font-bold px-3 py-1 rounded-xl">
+                  {getFlagEmoji(d.country_code)} {d.city}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <h1 className="text-5xl font-bold text-white drop-shadow-lg">
+              {trip.destinations?.[0]?.country_code ? getFlagEmoji(trip.destinations[0].country_code) + ' ' : ''}{trip.destination_city}
+            </h1>
+          )}
           <div className="flex flex-wrap gap-3 mt-3">
             <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
               📅 {startDateFmt} → {endDateFmt}
@@ -293,7 +309,19 @@ export default function TripDetailPage() {
                 <div key={dayIndex} className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark px-6 py-4 flex justify-between items-center">
                     <div>
-                      <h3 className="text-white font-bold text-lg">Dia {dayIndex + 1}</h3>
+                      <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                        Dia {dayIndex + 1}
+                        {(() => {
+                          const firstAttr = dayItems[0] ? attractions.find(a => a.id === dayItems[0].attraction_id) : null;
+                          const cityName = firstAttr?.city;
+                          const destInfo = trip.destinations?.find(d => d.city === cityName);
+                          return destInfo?.country_code ? (
+                            <span className="text-base">{getFlagEmoji(destInfo.country_code)} <span className="text-sm font-normal opacity-90">{cityName}</span></span>
+                          ) : cityName && trip.destinations && trip.destinations.length > 1 ? (
+                            <span className="text-sm font-normal opacity-90">{cityName}</span>
+                          ) : null;
+                        })()}
+                      </h3>
                       <p className="text-white/80 text-sm capitalize">{dayLabel}</p>
                     </div>
                     <div className="text-right">

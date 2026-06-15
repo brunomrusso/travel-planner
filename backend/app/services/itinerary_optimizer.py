@@ -19,28 +19,47 @@ class ItineraryOptimizer:
         self.osrm_service = OSRMService()
     
     async def generate_itinerary(self, trip_id: UUID, trip: Dict[str, Any]) -> List[Dict[str, Any]]:
-        attractions_response = self.supabase.table("attractions").select("*").eq("city", trip["destination_city"]).execute()
-        attractions = attractions_response.data
-        
-        if not attractions:
-            return []
-        
         profile = trip.get("traveler_profile", "cultural").lower()
         weights = self.TRAVELER_PROFILES.get(profile, self.TRAVELER_PROFILES["cultural"])
-        
-        scored_attractions = self._score_attractions(attractions, weights)
-        
+
         start_date = datetime.fromisoformat(trip["start_date"])
         end_date = datetime.fromisoformat(trip["end_date"])
         num_days = (end_date - start_date).days + 1
-        
-        itinerary = self._distribute_attractions_by_day(scored_attractions, num_days)
-        
-        itinerary = await self._optimize_daily_routes(itinerary)
-        
-        self._save_itinerary_to_db(trip_id, itinerary)
-        
-        return itinerary
+
+        destinations = trip.get("destinations") or []
+        if not destinations:
+            destinations = [{"city": trip["destination_city"]}]
+
+        all_itinerary: List[Dict[str, Any]] = []
+        days_per_city = max(1, num_days // len(destinations))
+
+        for city_idx, dest in enumerate(destinations):
+            city = dest["city"]
+            is_last = city_idx == len(destinations) - 1
+            city_start_day = city_idx * days_per_city + 1
+            city_end_day = num_days if is_last else (city_idx + 1) * days_per_city
+            city_days = city_end_day - city_start_day + 1
+
+            resp = self.supabase.table("attractions").select("*").eq("city", city).execute()
+            attractions = resp.data
+            if not attractions:
+                continue
+
+            scored = self._score_attractions(attractions, weights)
+            city_itinerary = self._distribute_attractions_by_day(scored, city_days)
+
+            # Offset day numbers to global trip days
+            for item in city_itinerary:
+                item["day_number"] += city_start_day - 1
+
+            all_itinerary.extend(city_itinerary)
+
+        if not all_itinerary:
+            return []
+
+        all_itinerary = await self._optimize_daily_routes(all_itinerary)
+        self._save_itinerary_to_db(trip_id, all_itinerary)
+        return all_itinerary
     
     def _score_attractions(self, attractions: List[Dict[str, Any]], weights: Dict[str, int]) -> List[Dict[str, Any]]:
         scored = []
