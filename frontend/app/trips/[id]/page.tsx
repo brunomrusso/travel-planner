@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
+import FlagImg from '@/components/FlagImg';
 
 const CATEGORY_ICONS: Record<string, string> = {
   restaurant: '🍽️', museum: '🏛️', park: '🌿', historic: '🏰',
@@ -68,10 +69,6 @@ interface Trip {
   traveler_profile: string;
 }
 
-function getFlagEmoji(code: string): string {
-  if (!code || code.length !== 2) return '🌍';
-  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
-}
 
 export default function TripDetailPage() {
   const router = useRouter();
@@ -207,14 +204,15 @@ export default function TripDetailPage() {
           {trip.destinations && trip.destinations.length > 1 ? (
             <div className="flex flex-wrap gap-2 mb-2">
               {trip.destinations.map((d, i) => (
-                <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-xl font-bold px-3 py-1 rounded-xl">
-                  {getFlagEmoji(d.country_code)} {d.city}
+                <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-xl font-bold px-3 py-1 rounded-xl flex items-center gap-2">
+                  <FlagImg code={d.country_code} size="lg" /> {d.city}
                 </span>
               ))}
             </div>
           ) : (
-            <h1 className="text-5xl font-bold text-white drop-shadow-lg">
-              {trip.destinations?.[0]?.country_code ? getFlagEmoji(trip.destinations[0].country_code) + ' ' : ''}{trip.destination_city}
+            <h1 className="text-5xl font-bold text-white drop-shadow-lg flex items-center gap-3">
+              {trip.destinations?.[0]?.country_code && <FlagImg code={trip.destinations[0].country_code} size="lg" />}
+              {trip.destination_city}
             </h1>
           )}
           <div className="flex flex-wrap gap-3 mt-3">
@@ -316,7 +314,10 @@ export default function TripDetailPage() {
                           const cityName = firstAttr?.city;
                           const destInfo = trip.destinations?.find(d => d.city === cityName);
                           return destInfo?.country_code ? (
-                            <span className="text-base">{getFlagEmoji(destInfo.country_code)} <span className="text-sm font-normal opacity-90">{cityName}</span></span>
+                            <span className="flex items-center gap-1">
+                              <FlagImg code={destInfo.country_code} size="sm" />
+                              <span className="text-sm font-normal opacity-90">{cityName}</span>
+                            </span>
                           ) : cityName && trip.destinations && trip.destinations.length > 1 ? (
                             <span className="text-sm font-normal opacity-90">{cityName}</span>
                           ) : null;

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
+import FlagImg from '@/components/FlagImg';
 
 const TRAVELER_PROFILES = [
   { value: 'adventure', label: '🏔️ Aventura', description: 'Trilhas, natureza, atividades ao ar livre' },
@@ -35,10 +36,6 @@ const emptyDest = (): DestEntry => ({
   valid: null, suggestions: [], showSuggestions: false, isSearching: false,
 });
 
-function getFlagEmoji(code: string): string {
-  if (!code || code.length !== 2) return '🌍';
-  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
-}
 
 export default function NewTripPage() {
   const router = useRouter();
@@ -180,8 +177,8 @@ export default function NewTripPage() {
                     <div className="relative flex-1">
                       <div className="relative">
                         {dest.valid && dest.country_code && (
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl select-none">
-                            {getFlagEmoji(dest.country_code)}
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 select-none">
+                            <FlagImg code={dest.country_code} size="md" />
                           </span>
                         )}
                         <input
@@ -216,7 +213,7 @@ export default function NewTripPage() {
                               <button key={si} type="button"
                                 onMouseDown={() => handleSelectCity(idx, city)}
                                 className="w-full px-4 py-3 text-left hover:bg-brand-teal-light flex items-center gap-3 border-b border-gray-100 last:border-0 transition">
-                                <span className="text-xl">{getFlagEmoji(cc)}</span>
+                                <FlagImg code={cc} size="lg" />
                                 <div>
                                   <p className="font-semibold text-gray-900">{name}</p>
                                   <p className="text-sm text-gray-500">{country}</p>
@@ -233,8 +230,8 @@ export default function NewTripPage() {
                     )}
                   </div>
                   {dest.valid === true && dest.country && (
-                    <p className="text-brand-teal text-xs mt-1 ml-8 font-medium">
-                      ✓ {getFlagEmoji(dest.country_code)} {dest.city}, {dest.country}
+                    <p className="text-brand-teal text-xs mt-1 ml-8 font-medium flex items-center gap-1">
+                      ✓ <FlagImg code={dest.country_code} size="sm" /> {dest.city}, {dest.country}
                     </p>
                   )}
                   {dest.query.length >= 2 && !dest.isSearching && dest.suggestions.length === 0 && dest.valid === null && (

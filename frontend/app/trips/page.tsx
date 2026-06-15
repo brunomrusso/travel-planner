@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSession, signOut } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
+import FlagImg from '@/components/FlagImg';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
@@ -18,10 +19,6 @@ interface Trip {
   created_at: string;
 }
 
-function getFlagEmoji(code: string): string {
-  if (!code || code.length !== 2) return '🌍';
-  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
-}
 
 export default function TripsPage() {
   const router = useRouter();
@@ -147,14 +144,14 @@ export default function TripsPage() {
                     {trip.destinations && trip.destinations.length > 1 ? (
                       <div className="flex flex-wrap gap-1">
                         {trip.destinations.map((d, i) => (
-                          <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-sm px-2 py-0.5 rounded-full font-medium">
-                            {getFlagEmoji(d.country_code)} {d.city}
+                          <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-sm px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <FlagImg code={d.country_code} size="sm" /> {d.city}
                           </span>
                         ))}
                       </div>
                     ) : (
                       <h3 className="text-white font-bold text-xl drop-shadow flex items-center gap-2">
-                        {trip.destinations?.[0]?.country_code ? getFlagEmoji(trip.destinations[0].country_code) : '🌍'}
+                        {trip.destinations?.[0]?.country_code && <FlagImg code={trip.destinations[0].country_code} size="md" />}
                         {trip.destination_city}
                       </h3>
                     )}

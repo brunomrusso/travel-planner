@@ -36,14 +36,22 @@ async def create_trip(trip: TripCreate, user_id: str = Depends(get_user_id_from_
         destinations = [d.model_dump() for d in (trip.destinations or [])]
         if not destinations:
             destinations = [{"city": trip.destination_city, "country": "", "country_code": ""}]
-        response = supabase.table("trips").insert({
+
+        base_data = {
             "user_id": user_id,
             "destination_city": trip.destination_city,
-            "destinations": destinations,
             "start_date": trip.start_date.isoformat(),
             "end_date": trip.end_date.isoformat(),
-            "traveler_profile": trip.traveler_profile
-        }).execute()
+            "traveler_profile": trip.traveler_profile,
+        }
+
+        try:
+            # Try with destinations column (requires migration)
+            response = supabase.table("trips").insert({**base_data, "destinations": destinations}).execute()
+        except Exception:
+            # Column doesn't exist yet — insert without it
+            response = supabase.table("trips").insert(base_data).execute()
+
         return response.data[0]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
