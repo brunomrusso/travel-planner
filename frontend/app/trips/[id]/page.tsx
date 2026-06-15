@@ -6,6 +6,23 @@ import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
 
+const CATEGORY_ICONS: Record<string, string> = {
+  restaurant: '🍽️', museum: '🏛️', park: '🌿', historic: '🏰',
+  entertainment: '🎭', beach: '🏖️', spa: '💆', zoo: '🦁',
+  market: '🛍️', gallery: '🖼️',
+};
+
+const CATEGORY_PT: Record<string, string> = {
+  restaurant: 'Restaurante', museum: 'Museu', park: 'Parque', historic: 'Histórico',
+  entertainment: 'Entretenimento', beach: 'Praia', spa: 'Spa', zoo: 'Zoológico',
+  market: 'Mercado', gallery: 'Galeria',
+};
+
+const PROFILE_PT: Record<string, string> = {
+  adventure: '🏔️ Aventura', cultural: '🏛️ Cultural', gastronomic: '🍽️ Gastronômico',
+  relax: '🏖️ Relaxamento', family: '👨‍👩‍👧‍👦 Família',
+};
+
 interface Attraction {
   id: string;
   name: string;
@@ -134,9 +151,9 @@ export default function TripDetailPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
-          <p className="text-gray-600 text-lg">Trip not found</p>
+          <p className="text-gray-600 text-lg">Viagem não encontrada</p>
           <Link href="/trips" className="text-brand-teal hover:text-brand-teal-dark font-medium mt-4 inline-block">
-            Back to trips
+            Voltar para viagens
           </Link>
         </div>
       </div>
@@ -144,87 +161,153 @@ export default function TripDetailPage() {
   }
 
   const days = Math.ceil((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  const itineraryByDay = Array.from({ length: days }, (_, i) => 
+  const itineraryByDay = Array.from({ length: days }, (_, i) =>
     itinerary.filter(item => item.day_number === i + 1).sort((a, b) => a.order_in_day - b.order_in_day)
   );
+  const totalAttractions = itinerary.length;
+  const startDateFmt = new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const endDateFmt = new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
-      <nav className="bg-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/trips" className="text-brand-teal hover:text-brand-teal-dark font-medium">
-            ← Back to trips
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero banner com foto do destino */}
+      <div className="relative h-72 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
+        <img
+          src={`https://source.unsplash.com/1600x500/?${encodeURIComponent(trip.destination_city)},travel,landmark`}
+          alt={trip.destination_city}
+          className="w-full h-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute top-4 left-6">
+          <Link href="/trips" className="text-white/90 hover:text-white font-medium flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm transition">
+            ← Minhas Viagens
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">{trip.destination_city}</h1>
-          <div></div>
         </div>
-      </nav>
+        <div className="absolute bottom-6 left-6 right-6">
+          <h1 className="text-5xl font-bold text-white drop-shadow-lg">{trip.destination_city}</h1>
+          <div className="flex flex-wrap gap-3 mt-3">
+            <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
+              📅 {startDateFmt} → {endDateFmt}
+            </span>
+            <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
+              🕐 {days} {days === 1 ? 'dia' : 'dias'}
+            </span>
+            <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
+              {PROFILE_PT[trip.traveler_profile] || trip.traveler_profile}
+            </span>
+          </div>
+        </div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <div className="grid md:grid-cols-3 gap-6 mb-6">
-            <div>
-              <p className="text-gray-600 text-sm">Destination</p>
-              <p className="text-2xl font-bold text-gray-900">{trip.destination_city}</p>
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Stats */}
+        {itinerary.length > 0 && (
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-white rounded-xl shadow-sm p-4 text-center border-t-4 border-brand-teal">
+              <p className="text-3xl font-bold text-brand-teal">{days}</p>
+              <p className="text-gray-500 text-sm mt-1">{days === 1 ? 'Dia' : 'Dias'} de viagem</p>
             </div>
-            <div>
-              <p className="text-gray-600 text-sm">Duration</p>
-              <p className="text-2xl font-bold text-gray-900">{days} days</p>
+            <div className="bg-white rounded-xl shadow-sm p-4 text-center border-t-4 border-brand-orange">
+              <p className="text-3xl font-bold text-brand-orange">{totalAttractions}</p>
+              <p className="text-gray-500 text-sm mt-1">Atrações no roteiro</p>
             </div>
-            <div>
-              <p className="text-gray-600 text-sm">Travel Profile</p>
-              <p className="text-2xl font-bold text-gray-900 capitalize">{trip.traveler_profile}</p>
+            <div className="bg-white rounded-xl shadow-sm p-4 text-center border-t-4 border-gray-300">
+              <p className="text-3xl font-bold text-gray-700">{Math.round(totalAttractions / days)}</p>
+              <p className="text-gray-500 text-sm mt-1">Atrações por dia</p>
             </div>
           </div>
+        )}
 
-          {itinerary.length === 0 && (
-            <div>
-              {generateError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-                  {generateError}
-                </div>
-              )}
-              <button
-                onClick={handleGenerateItinerary}
-                disabled={isGenerating}
-                className="w-full bg-brand-orange text-white py-3 rounded-lg hover:bg-brand-orange-dark font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isGenerating ? 'Generating itinerary... (may take up to 30s)' : 'Generate Itinerary'}
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Botão gerar roteiro */}
+        {itinerary.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-8 mb-8 text-center">
+            <div className="text-6xl mb-4">🗺️</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu roteiro está pronto para ser criado!</h2>
+            <p className="text-gray-500 mb-6">Vamos montar um itinerário personalizado para {trip.destination_city} com base no seu perfil de viagem.</p>
+            {generateError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+                {generateError}
+              </div>
+            )}
+            <button
+              onClick={handleGenerateItinerary}
+              disabled={isGenerating}
+              className="bg-brand-orange text-white px-10 py-4 rounded-xl hover:bg-brand-orange-dark font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition inline-flex items-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Gerando roteiro... (pode levar até 30s)
+                </>
+              ) : '✨ Gerar Roteiro'}
+            </button>
+          </div>
+        )}
 
+        {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
-            {itineraryByDay.map((dayItems, dayIndex) => (
-              <div key={dayIndex} className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                  Day {dayIndex + 1} - {new Date(new Date(trip.start_date).getTime() + dayIndex * 24 * 60 * 60 * 1000).toLocaleDateString()}
-                </h2>
-                {dayItems.length === 0 ? (
-                  <p className="text-gray-600">No activities planned for this day</p>
-                ) : (
-                  <div className="space-y-3">
-                    {dayItems.map((item, index) => {
-                      const attraction = attractions.find(a => a.id === item.attraction_id);
-                      return (
-                        <div key={item.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                          <div className="text-2xl font-bold text-brand-teal min-w-fit">{index + 1}.</div>
-                          <div className="flex-1">
-                            <h3 className="font-bold text-gray-900">{attraction?.name}</h3>
-                            <p className="text-sm text-gray-600">
-                              {attraction?.category} • {attraction?.visit_duration_minutes} min
-                            </p>
-                            {item.notes && <p className="text-sm text-gray-700 mt-1">{item.notes}</p>}
-                          </div>
-                        </div>
-                      );
-                    })}
+            <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+            {itineraryByDay.map((dayItems, dayIndex) => {
+              const dayDate = new Date(trip.start_date + 'T12:00:00');
+              dayDate.setDate(dayDate.getDate() + dayIndex);
+              const dayLabel = dayDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+              const dayDuration = dayItems.reduce((acc, item) => {
+                const attr = attractions.find(a => a.id === item.attraction_id);
+                return acc + (attr?.visit_duration_minutes || 0);
+              }, 0);
+
+              return (
+                <div key={dayIndex} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark px-6 py-4 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-white font-bold text-lg">Dia {dayIndex + 1}</h3>
+                      <p className="text-white/80 text-sm capitalize">{dayLabel}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-semibold">{dayItems.length} {dayItems.length === 1 ? 'atração' : 'atrações'}</p>
+                      {dayDuration > 0 && <p className="text-white/80 text-sm">~{Math.round(dayDuration / 60)}h de atividades</p>}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  <div className="divide-y divide-gray-100">
+                    {dayItems.length === 0 ? (
+                      <p className="text-gray-500 p-6 text-center">Nenhuma atividade planejada para este dia</p>
+                    ) : (
+                      dayItems.map((item, index) => {
+                        const attraction = attractions.find(a => a.id === item.attraction_id);
+                        const icon = CATEGORY_ICONS[attraction?.category || ''] || '📍';
+                        const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || '';
+                        const durationH = attraction ? Math.floor(attraction.visit_duration_minutes / 60) : 0;
+                        const durationM = attraction ? attraction.visit_duration_minutes % 60 : 0;
+                        const durationStr = durationH > 0
+                          ? `${durationH}h${durationM > 0 ? durationM + 'min' : ''}`
+                          : `${durationM}min`;
+
+                        return (
+                          <div key={item.id} className="flex items-center gap-4 p-5 hover:bg-gray-50 transition">
+                            <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
+                              {index + 1}
+                            </div>
+                            <div className="text-2xl flex-shrink-0">{icon}</div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-gray-900 truncate">{attraction?.name || 'Atração'}</h4>
+                              <p className="text-sm text-gray-500">{categoryPt}</p>
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                                ⏱ {durationStr}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>

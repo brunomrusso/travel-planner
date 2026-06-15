@@ -30,7 +30,7 @@ export default function Home() {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     );
@@ -40,13 +40,13 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
       <nav className="bg-white shadow-md border-b-4 border-brand-teal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-brand-teal">✈️ Travel Planner</h1>
+          <h1 className="text-2xl font-bold text-brand-teal">✈️ Roteiro Certo</h1>
           <div className="space-x-4">
             <Link href="/login" className="text-gray-600 hover:text-brand-teal font-medium">
-              Login
+              Entrar
             </Link>
             <Link href="/register" className="bg-brand-orange text-white px-4 py-2 rounded-lg hover:bg-brand-orange-dark font-medium">
-              Sign Up
+              Cadastrar
             </Link>
           </div>
         </div>
@@ -55,38 +55,38 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center mb-16">
           <h2 className="text-5xl font-bold text-brand-black mb-4">
-            Plan Your Perfect Trip
+            Planeje a Viagem Perfeita
           </h2>
           <p className="text-xl text-gray-600 mb-8">
-            Create personalized travel itineraries based on your travel style
+            Crie roteiros de viagem personalizados de acordo com seu estilo de viagem
           </p>
           <Link href="/register" className="inline-block bg-brand-orange text-white px-8 py-3 rounded-lg hover:bg-brand-orange-dark font-semibold text-lg">
-            Get Started
+            Começar agora
           </Link>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 mt-16">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="text-4xl mb-4">🗺️</div>
-            <h3 className="text-xl font-bold text-brand-black mb-2">Explore Cities</h3>
+            <h3 className="text-xl font-bold text-brand-black mb-2">Explore Destinos</h3>
             <p className="text-gray-600">
-              Add multiple cities to your trip and discover amazing attractions
+              Adicione cidades à sua viagem e descubra atrações incríveis
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="text-4xl mb-4">🎯</div>
-            <h3 className="text-xl font-bold text-brand-black mb-2">Personalized Routes</h3>
+            <h3 className="text-xl font-bold text-brand-black mb-2">Roteiros Personalizados</h3>
             <p className="text-gray-600">
-              Get AI-optimized itineraries based on your travel profile
+              Itinerários otimizados com base no seu perfil de viajante
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="text-4xl mb-4">✏️</div>
-            <h3 className="text-xl font-bold text-brand-black mb-2">Flexible Planning</h3>
+            <h3 className="text-xl font-bold text-brand-black mb-2">Planejamento Flexível</h3>
             <p className="text-gray-600">
-              Easily customize and adjust your itinerary as needed
+              Personalize e ajuste seu itinerário da forma que precisar
             </p>
           </div>
         </div>

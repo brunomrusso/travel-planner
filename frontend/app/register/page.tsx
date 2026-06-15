@@ -42,8 +42,8 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white flex items-center justify-center px-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Create Account</h1>
-        <p className="text-gray-600 text-center mb-8">Join Travel Planner today</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Criar Conta</h1>
+        <p className="text-gray-600 text-center mb-8">Crie sua conta no Roteiro Certo</p>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
@@ -53,7 +53,7 @@ export default function RegisterPage() {
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Email</label>
+            <label className="block text-gray-700 font-medium mb-2">E-mail</label>
             <input
               type="email"
               value={email}
@@ -65,7 +65,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Password</label>
+            <label className="block text-gray-700 font-medium mb-2">Senha</label>
             <input
               type="password"
               value={password}
@@ -77,7 +77,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Confirm Password</label>
+            <label className="block text-gray-700 font-medium mb-2">Confirmar Senha</label>
             <input
               type="password"
               value={confirmPassword}
@@ -93,14 +93,14 @@ export default function RegisterPage() {
             disabled={isLoading}
             className="w-full bg-brand-teal text-white py-2 rounded-lg hover:bg-brand-teal-dark font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Creating account...' : 'Sign Up'}
+            {isLoading ? 'Criando conta...' : 'Cadastrar'}
           </button>
         </form>
 
         <p className="text-center text-gray-600 mt-6">
-          Already have an account?{' '}
+          Já tem uma conta?{' '}
           <Link href="/login" className="text-brand-orange hover:text-brand-orange-dark font-medium">
-            Sign in
+            Entrar
           </Link>
         </p>
       </div>

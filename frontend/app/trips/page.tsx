@@ -80,7 +80,7 @@ export default function TripsPage() {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading trips...</p>
+          <p className="text-gray-600">Carregando viagens...</p>
         </div>
       </div>
     );
@@ -90,50 +90,58 @@ export default function TripsPage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
       <nav className="bg-white shadow-md border-b-4 border-brand-teal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-brand-teal">✈️ Travel Planner</h1>
+          <h1 className="text-2xl font-bold text-brand-teal">✈️ Roteiro Certo</h1>
           <button
             onClick={handleLogout}
             className="text-gray-600 hover:text-red-600 font-medium"
           >
-            Logout
+            Sair
           </button>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">My Trips</h2>
+          <h2 className="text-3xl font-bold text-gray-900">Minhas Viagens</h2>
           <Link
             href="/trips/new"
             className="bg-brand-orange text-white px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium"
           >
-            + New Trip
+            + Nova Viagem
           </Link>
         </div>
 
         {trips.length === 0 ? (
           <div className="bg-white rounded-lg shadow-lg p-12 text-center">
             <div className="text-6xl mb-4">🗺️</div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">No trips yet</h3>
-            <p className="text-gray-600 mb-6">Create your first trip to get started planning!</p>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Nenhuma viagem ainda</h3>
+            <p className="text-gray-600 mb-6">Crie sua primeira viagem e comece a planejar!</p>
             <Link
               href="/trips/new"
               className="inline-block bg-brand-orange text-white px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium"
             >
-              Create Trip
+              Criar Viagem
             </Link>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {trips.map((trip) => (
-              <div key={trip.id} className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition">
-                <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark h-32"></div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{trip.destination_city}</h3>
-                  <p className="text-gray-600 mb-1">
-                    📅 {new Date(trip.start_date).toLocaleDateString()} - {new Date(trip.end_date).toLocaleDateString()}
+              <div key={trip.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition group">
+                <div className="relative h-36 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
+                  <img
+                    src={`https://source.unsplash.com/400x200/?${encodeURIComponent(trip.destination_city)},travel`}
+                    alt={trip.destination_city}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                  <h3 className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">{trip.destination_city}</h3>
+                </div>
+                <div className="p-5">
+                  <p className="text-gray-600 text-sm mb-1">
+                    📅 {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                   </p>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 text-sm mb-4">
                     👤 {trip.traveler_profile}
                   </p>
                   <div className="flex gap-2">
@@ -141,13 +149,13 @@ export default function TripsPage() {
                       href={`/trips/${trip.id}`}
                       className="flex-1 bg-brand-teal text-white px-4 py-2 rounded text-center hover:bg-brand-teal-dark font-medium"
                     >
-                      View
+                      Ver Roteiro
                     </Link>
                     <button
                       onClick={() => handleDeleteTrip(trip.id)}
                       className="flex-1 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 font-medium"
                     >
-                      Delete
+                      Excluir
                     </button>
                   </div>
                 </div>
