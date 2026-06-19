@@ -1,21 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Header
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status, Depends
+from typing import List
 from uuid import UUID
 from app.models.itinerary import ItineraryItem, ItineraryItemCreate, ItineraryItemUpdate
 from app.database import get_supabase
+from app.auth import get_user_id_from_token
 
 router = APIRouter(prefix="/itineraries", tags=["itineraries"])
-
-def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
-    if not authorization:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
-    try:
-        token = authorization.split(" ")[1]
-        supabase = get_supabase()
-        user = supabase.auth.get_user(token)
-        return user.user.id
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 @router.get("/{trip_id}", response_model=List[ItineraryItem])
 async def get_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
