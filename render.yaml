@@ -1,0 +1,48 @@
+services:
+  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  - type: web
+    name: roteiro-certo-api
+    env: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
+      # Preencher no dashboard do Render:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      # Atualizar após o frontend estar no ar:
+      - key: FRONTEND_URL
+        value: https://roteiro-certo-frontend.onrender.com
+      - key: BACKEND_URL
+        value: https://roteiro-certo-api.onrender.com
+
+  # ── Frontend (Next.js) ──────────────────────────────────────────────────────
+  - type: web
+    name: roteiro-certo-frontend
+    env: node
+    plan: free
+    region: oregon
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npx next start -p $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      # Preencher no dashboard do Render:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      # URL do backend (gerada ao criar o serviço acima):
+      - key: NEXT_PUBLIC_API_URL
+        value: https://roteiro-certo-api.onrender.com
