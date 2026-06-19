@@ -1,4 +1,4 @@
-import jwt
+import httpx
 from fastapi import HTTPException, status, Header
 from typing import Optional
 from app.config import settings
@@ -12,19 +12,24 @@ def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> str:
         )
     try:
         token = authorization.split(" ")[1]
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
+        response = httpx.get(
+            f"{settings.SUPABASE_URL}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": settings.SUPABASE_KEY,
+            },
+            timeout=10.0,
         )
-        user_id: str = payload.get("sub")
-        if not user_id:
-            raise ValueError("No sub claim in token")
-        return user_id
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}")
+        if response.status_code == 200:
+            return response.json()["id"]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Auth error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Auth error: {e}",
+        )

@@ -8,4 +8,3 @@ httpx==0.24.1
 requests==2.31.0
 python-multipart==0.0.6
 gotrue==2.8.0
-PyJWT==2.8.0
