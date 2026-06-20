@@ -72,6 +72,7 @@ class ItineraryOptimizer:
             return []
 
         all_itinerary = await self._optimize_daily_routes(all_itinerary)
+        all_itinerary = self._assign_times(all_itinerary)
         self._save_itinerary_to_db(trip_id, all_itinerary)
         return all_itinerary
     
@@ -162,6 +163,40 @@ class ItineraryOptimizer:
         
         return R * c
     
+    def _assign_times(self, itinerary: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Assign realistic start times per day, starting at 09:00, accounting for
+        visit duration, travel time between attractions, and a lunch break."""
+        days = defaultdict(list)
+        for item in itinerary:
+            days[item["day_number"]].append(item)
+
+        for day, items in days.items():
+            items.sort(key=lambda x: x["order_in_day"])
+            current = datetime(2000, 1, 1, 9, 0)  # day starts at 09:00
+            had_lunch = False
+            prev_coord = None
+
+            for item in items:
+                attr = item["attraction"]
+                coord = (attr["latitude"], attr["longitude"])
+
+                if prev_coord is not None:
+                    dist = self._distance(prev_coord, coord)
+                    transport = self._get_transport(dist)
+                    travel_min = round((dist / transport["speed_kmh"]) * 60)
+                    current += timedelta(minutes=travel_min)
+
+                # Lunch break (~1h) once, when we reach midday
+                if not had_lunch and 12 <= current.hour < 15:
+                    current += timedelta(minutes=60)
+                    had_lunch = True
+
+                item["start_time"] = current.strftime("%H:%M:%S")
+                current += timedelta(minutes=attr.get("visit_duration_minutes", 60))
+                prev_coord = coord
+
+        return itinerary
+
     def _get_transport(self, distance_km: float) -> Dict[str, Any]:
         """Return best transport mode and estimated travel time for a given distance."""
         if distance_km < 1.0:

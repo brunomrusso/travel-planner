@@ -6,6 +6,7 @@ import { getSession, signOut } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
 import FlagImg from '@/components/FlagImg';
+import CityImage from '@/components/CityImage';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
@@ -140,14 +141,8 @@ export default function TripsPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {trips.map((trip) => (
               <div key={trip.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition group">
-                <div className="relative h-36 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
-                  <img
-                    src={`https://source.unsplash.com/400x200/?${encodeURIComponent(trip.destination_city)},travel`}
-                    alt={trip.destination_city}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                <CityImage city={trip.destination_city} className="relative h-36 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4">
                     {trip.destinations && trip.destinations.length > 1 ? (
                       <div className="flex flex-wrap gap-1">
@@ -164,7 +159,7 @@ export default function TripsPage() {
                       </h3>
                     )}
                   </div>
-                </div>
+                </CityImage>
                 <div className="p-5">
                   <p className="text-gray-600 text-sm mb-1">
                     📅 {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}

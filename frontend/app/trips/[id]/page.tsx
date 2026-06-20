@@ -5,7 +5,13 @@ import { useRouter, useParams } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
+import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
+
+const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
+  ssr: false,
+  loading: () => <div className="h-[280px] bg-gray-100 animate-pulse flex items-center justify-center text-gray-400">Carregando mapa...</div>,
+});
 
 const CATEGORY_ICONS: Record<string, string> = {
   restaurant: '🍽️', museum: '🏛️', park: '🌿', historic: '🏰',
@@ -303,6 +309,13 @@ export default function TripDetailPage() {
                 return acc + (attr?.visit_duration_minutes || 0);
               }, 0);
 
+              const dayPoints = dayItems
+                .map((item, i) => {
+                  const a = attractions.find(x => x.id === item.attraction_id);
+                  return a ? { lat: a.latitude, lng: a.longitude, name: a.name, order: i + 1 } : null;
+                })
+                .filter((p): p is { lat: number; lng: number; name: string; order: number } => p !== null);
+
               return (
                 <div key={dayIndex} className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark px-6 py-4 flex justify-between items-center">
@@ -376,7 +389,12 @@ export default function TripDetailPage() {
                               <div className="text-2xl flex-shrink-0">{icon}</div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-bold text-gray-900 truncate">{attraction?.name || 'Atração'}</h4>
-                                <p className="text-sm text-gray-500">{categoryPt}</p>
+                                <p className="text-sm text-gray-500 flex items-center gap-2">
+                                  {item.start_time && (
+                                    <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
+                                  )}
+                                  <span>{categoryPt}</span>
+                                </p>
                               </div>
                               <div className="flex-shrink-0 text-right">
                                 <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
@@ -390,6 +408,12 @@ export default function TripDetailPage() {
                       })
                     )}
                   </div>
+
+                  {dayPoints.length > 0 && (
+                    <div className="border-t border-gray-100">
+                      <ItineraryMap points={dayPoints} />
+                    </div>
+                  )}
                 </div>
               );
             })}
