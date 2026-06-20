@@ -43,11 +43,22 @@ async def health():
 
 @app.get("/debug")
 async def debug():
+    import httpx
+    supabase_test = None
+    try:
+        r = httpx.get(f"{settings.SUPABASE_URL}/rest/v1/trips?select=count", headers={
+            "apikey": settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY,
+            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY}",
+        }, timeout=5)
+        supabase_test = {"status": r.status_code, "body": r.json()}
+    except Exception as e:
+        supabase_test = {"error": str(e)}
     return {
         "status": "ok",
-        "backend_url": settings.BACKEND_URL,
-        "frontend_url": settings.FRONTEND_URL,
-        "supabase_configured": bool(settings.SUPABASE_URL),
+        "supabase_url": settings.SUPABASE_URL,
+        "supabase_key_prefix": (settings.SUPABASE_KEY or "")[:20] + "...",
+        "service_role_prefix": (settings.SUPABASE_SERVICE_ROLE_KEY or "")[:20] + "...",
+        "supabase_test": supabase_test,
     }
 
 if __name__ == "__main__":
