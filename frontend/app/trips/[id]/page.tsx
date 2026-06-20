@@ -223,7 +223,7 @@ export default function TripDetailPage() {
               🕐 {days} {days === 1 ? 'dia' : 'dias'}
             </span>
             <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-              {PROFILE_PT[trip.traveler_profile] || trip.traveler_profile}
+              {trip.traveler_profile.split(',').map(p => PROFILE_PT[p.trim()] || p.trim()).join(' • ')}
             </span>
           </div>
         </div>

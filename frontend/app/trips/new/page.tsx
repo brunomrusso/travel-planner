@@ -40,7 +40,8 @@ const emptyDest = (): DestEntry => ({
 export default function NewTripPage() {
   const router = useRouter();
   const [destinations, setDestinations] = useState<DestEntry[]>([emptyDest()]);
-  const [formData, setFormData] = useState({ start_date: '', end_date: '', traveler_profile: 'cultural' });
+  const [formData, setFormData] = useState({ start_date: '', end_date: '' });
+  const [profiles, setProfiles] = useState<string[]>(['cultural']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const debounceRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -108,10 +109,17 @@ export default function NewTripPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const toggleProfile = (value: string) => {
+    setProfiles(prev =>
+      prev.includes(value) ? prev.filter(p => p !== value) : [...prev, value]
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const invalid = destinations.find(d => d.valid !== true);
     if (invalid) { setError('Confirme todos os destinos na lista de sugestões.'); return; }
+    if (profiles.length === 0) { setError('Selecione ao menos um perfil de viajante.'); return; }
     setError('');
     setIsLoading(true);
     try {
@@ -125,7 +133,7 @@ export default function NewTripPage() {
           destinations: destList,
           start_date: formData.start_date,
           end_date: formData.end_date,
-          traveler_profile: formData.traveler_profile,
+          traveler_profile: profiles.join(','),
         },
         { headers: { Authorization: `Bearer ${data.session.access_token}` } }
       );
@@ -264,20 +272,27 @@ export default function NewTripPage() {
 
           {/* Perfil */}
           <div>
-            <label className="block text-gray-700 font-semibold mb-3">🎯 Perfil do Viajante</label>
+            <label className="block text-gray-700 font-semibold mb-1">🎯 Perfil do Viajante</label>
+            <p className="text-sm text-gray-500 mb-3">Selecione um ou mais perfis</p>
             <div className="grid grid-cols-2 gap-3">
-              {TRAVELER_PROFILES.map(profile => (
-                <button key={profile.value} type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, traveler_profile: profile.value }))}
-                  className={`p-4 rounded-xl border-2 text-left transition ${
-                    formData.traveler_profile === profile.value
-                      ? 'border-brand-teal bg-brand-teal-light shadow-md'
-                      : 'border-gray-200 hover:border-brand-teal hover:bg-gray-50'
-                  }`}>
-                  <div className="font-semibold text-gray-900">{profile.label}</div>
-                  <div className="text-sm text-gray-500 mt-1">{profile.description}</div>
-                </button>
-              ))}
+              {TRAVELER_PROFILES.map(profile => {
+                const selected = profiles.includes(profile.value);
+                return (
+                  <button key={profile.value} type="button"
+                    onClick={() => toggleProfile(profile.value)}
+                    className={`relative p-4 rounded-xl border-2 text-left transition ${
+                      selected
+                        ? 'border-brand-teal bg-brand-teal-light shadow-md'
+                        : 'border-gray-200 hover:border-brand-teal hover:bg-gray-50'
+                    }`}>
+                    {selected && (
+                      <span className="absolute top-2 right-2 text-brand-teal font-bold">✓</span>
+                    )}
+                    <div className="font-semibold text-gray-900">{profile.label}</div>
+                    <div className="text-sm text-gray-500 mt-1">{profile.description}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

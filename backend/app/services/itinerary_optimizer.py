@@ -18,9 +18,23 @@ class ItineraryOptimizer:
         self.supabase = supabase
         self.osrm_service = OSRMService()
     
+    def _merge_profile_weights(self, profiles_str: str) -> Dict[str, int]:
+        profile_keys = [p.strip().lower() for p in (profiles_str or "").split(",") if p.strip()]
+        if not profile_keys:
+            profile_keys = ["cultural"]
+
+        merged: Dict[str, int] = {}
+        for key in profile_keys:
+            weights = self.TRAVELER_PROFILES.get(key)
+            if not weights:
+                continue
+            for category, weight in weights.items():
+                merged[category] = max(merged.get(category, 0), weight)
+
+        return merged or self.TRAVELER_PROFILES["cultural"]
+
     async def generate_itinerary(self, trip_id: UUID, trip: Dict[str, Any]) -> List[Dict[str, Any]]:
-        profile = trip.get("traveler_profile", "cultural").lower()
-        weights = self.TRAVELER_PROFILES.get(profile, self.TRAVELER_PROFILES["cultural"])
+        weights = self._merge_profile_weights(trip.get("traveler_profile", "cultural"))
 
         start_date = datetime.fromisoformat(trip["start_date"])
         end_date = datetime.fromisoformat(trip["end_date"])

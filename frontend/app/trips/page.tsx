@@ -9,6 +9,14 @@ import FlagImg from '@/components/FlagImg';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
+const PROFILE_PT: Record<string, string> = {
+  adventure: '🏔️ Aventura', cultural: '🏛️ Cultural', gastronomic: '🍽️ Gastronômico',
+  relax: '🏖️ Relaxamento', family: '👨‍👩‍👧‍👦 Família',
+};
+
+const formatProfiles = (raw: string) =>
+  raw.split(',').map(p => PROFILE_PT[p.trim()] || p.trim()).join(' • ');
+
 interface Trip {
   id: string;
   destination_city: string;
@@ -162,7 +170,7 @@ export default function TripsPage() {
                     📅 {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                   </p>
                   <p className="text-gray-600 text-sm mb-4">
-                    👤 {trip.traveler_profile}
+                    {formatProfiles(trip.traveler_profile)}
                   </p>
                   <div className="flex gap-2">
                     <Link
