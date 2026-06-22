@@ -49,6 +49,23 @@ function getTransport(distKm: number) {
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
+const WEATHER_ICON: Record<number, string> = {
+  113: '☀️', 116: '⛅', 119: '☁️', 122: '☁️',
+  143: '🌫️', 248: '🌫️', 260: '🌫️',
+  176: '🌦️', 179: '🌨️', 182: '🌧️', 185: '🌧️',
+  200: '⛈️', 227: '❄️', 230: '❄️',
+  263: '🌧️', 266: '🌧️', 281: '🌧️', 284: '🌧️',
+  293: '🌧️', 296: '🌧️', 299: '🌧️', 302: '🌧️',
+  305: '🌧️', 308: '🌧️', 311: '🌧️', 314: '🌧️',
+  317: '🌨️', 320: '🌨️', 323: '❄️', 326: '❄️',
+  329: '❄️', 332: '❄️', 335: '❄️', 338: '❄️',
+  350: '🌧️', 353: '🌦️', 356: '🌧️', 359: '🌧️',
+  362: '🌨️', 365: '🌨️', 368: '🌨️', 371: '❄️',
+  374: '🌧️', 377: '🌧️', 386: '⛈️', 389: '⛈️',
+  392: '⛈️', 395: '⛈️',
+};
+const getWeatherIcon = (code: number) => WEATHER_ICON[code] ?? '🌤️';
+
 interface Attraction {
   id: string;
   name: string;
@@ -106,6 +123,14 @@ export default function TripDetailPage() {
       const saved = localStorage.getItem(`visited_${typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : ''}`);
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
+  });
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, { icon: string; maxC: number; minC: number }>>({});
+  const [dayNotes, setDayNotes] = useState<Record<number, string>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(`notes_${window.location.pathname.split('/').pop()}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
   });
   const [token, setToken] = useState('');
 
@@ -201,6 +226,14 @@ export default function TripDetailPage() {
     ]);
   };
 
+  const updateDayNote = (day: number, text: string) => {
+    setDayNotes(prev => {
+      const next = { ...prev, [day]: text };
+      try { localStorage.setItem(`notes_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const toggleVisited = (attractionId: string) => {
     setVisited(prev => {
       const next = new Set(prev);
@@ -221,6 +254,27 @@ export default function TripDetailPage() {
     ));
     persistReorder([{ id: item.id, day_number: newDay, order_in_day: newOrder }]);
   };
+
+  useEffect(() => {
+    if (!trip || itinerary.length === 0) return;
+    const city = trip.destination_city || trip.destinations?.[0]?.city;
+    if (!city) return;
+    fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`)
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, { icon: string; maxC: number; minC: number }> = {};
+        for (const w of (data.weather || [])) {
+          const code = parseInt(w.hourly?.[4]?.weatherCode ?? '113');
+          map[w.date] = {
+            icon: getWeatherIcon(code),
+            maxC: parseInt(w.maxtempC),
+            minC: parseInt(w.mintempC),
+          };
+        }
+        setWeatherByDate(map);
+      })
+      .catch(() => {});
+  }, [trip?.destination_city, itinerary.length]);
 
   const handleGenerateItinerary = async () => {
     setIsGenerating(true);
@@ -442,6 +496,7 @@ export default function TripDetailPage() {
                     <div>
                       <h3 className="text-white font-bold text-lg flex items-center gap-2">
                         Dia {dayIndex + 1}
+                        {(() => { const dk = dayDate.toISOString().split('T')[0]; const w = weatherByDate[dk]; return w ? ( <span className="flex items-center gap-1 bg-white/20 rounded-lg px-2 py-0.5 text-sm font-normal"> <span>{w.icon}</span> <span>{w.maxC}°</span> <span className="opacity-70 text-xs">{w.minC}°</span> </span> ) : null; })()}
                         {(() => {
                           const firstAttr = dayItems[0] ? attractions.find(a => a.id === dayItems[0].attraction_id) : null;
                           const cityName = firstAttr?.city;
@@ -615,6 +670,16 @@ export default function TripDetailPage() {
                       <ItineraryMap points={dayPoints} />
                     </div>
                   )}
+
+                  <div className="print:hidden border-t border-gray-100 px-5 py-3">
+                    <textarea
+                      placeholder="📝 Notas do dia (hospedagem, reservas, lembretes...)"
+                      value={dayNotes[dayIndex + 1] || ''}
+                      onChange={e => updateDayNote(dayIndex + 1, e.target.value)}
+                      rows={dayNotes[dayIndex + 1] ? 3 : 1}
+                      className="w-full text-sm text-gray-600 placeholder-gray-300 bg-gray-50/60 rounded-lg px-3 py-2 border border-transparent focus:border-gray-200 focus:bg-white outline-none resize-none transition"
+                    />
+                  </div>
                 </div>
               );
             })}
