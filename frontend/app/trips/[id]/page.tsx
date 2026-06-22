@@ -7,6 +7,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
+import CityImage from '@/components/CityImage';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -193,13 +194,7 @@ export default function TripDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero banner com foto do destino */}
-      <div className="relative h-72 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
-        <img
-          src={`https://source.unsplash.com/1600x500/?${encodeURIComponent(trip.destination_city)},travel,landmark`}
-          alt={trip.destination_city}
-          className="w-full h-full object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+      <CityImage city={trip.destination_city} className="relative h-72 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute top-4 left-6">
           <Link href="/trips" className="text-white/90 hover:text-white font-medium flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm transition">
@@ -233,7 +228,7 @@ export default function TripDetailPage() {
             </span>
           </div>
         </div>
-      </div>
+      </CityImage>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Stats */}

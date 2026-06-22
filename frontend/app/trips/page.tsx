@@ -115,11 +115,11 @@ export default function TripsPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">Minhas Viagens</h2>
+        <div className="flex justify-between items-center gap-3 mb-8">
+          <h2 className="text-xl sm:text-3xl font-bold text-gray-900 min-w-0">Minhas Viagens</h2>
           <Link
             href="/trips/new"
-            className="bg-brand-orange text-white px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium"
+            className="whitespace-nowrap flex-shrink-0 bg-brand-orange text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-brand-orange-dark font-medium text-sm sm:text-base"
           >
             + Nova Viagem
           </Link>
