@@ -90,7 +90,7 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "llama3-8b-8192",
+                    "model": "llama-3.1-8b-instant",
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.65,
                     "max_tokens": 1024,
