@@ -46,14 +46,24 @@ class ItineraryOptimizer:
             destinations = [{"city": trip["destination_city"]}]
 
         all_itinerary: List[Dict[str, Any]] = []
-        days_per_city = max(1, num_days // len(destinations))
 
+        # Use explicit days per city if provided, otherwise distribute equally
+        explicit = [dest.get("days") for dest in destinations]
+        if all(isinstance(d, int) and d > 0 for d in explicit):
+            city_days_list = list(explicit)
+            # Adjust last city to absorb rounding
+            city_days_list[-1] = max(1, num_days - sum(city_days_list[:-1]))
+        else:
+            base = max(1, num_days // len(destinations))
+            city_days_list = [base] * len(destinations)
+            city_days_list[-1] = max(1, num_days - sum(city_days_list[:-1]))
+
+        current_day = 1
         for city_idx, dest in enumerate(destinations):
             city = dest["city"]
-            is_last = city_idx == len(destinations) - 1
-            city_start_day = city_idx * days_per_city + 1
-            city_end_day = num_days if is_last else (city_idx + 1) * days_per_city
-            city_days = city_end_day - city_start_day + 1
+            city_days = city_days_list[city_idx]
+            city_start_day = current_day
+            current_day += city_days
 
             min_needed = city_days * 5
             await enrich_city_attractions(self.supabase, city, min_needed)

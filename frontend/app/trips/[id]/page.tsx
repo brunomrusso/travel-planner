@@ -132,6 +132,10 @@ export default function TripDetailPage() {
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
+  const [addModalDay, setAddModalDay] = useState<number | null>(null);
+  const [availableAttractions, setAvailableAttractions] = useState<Attraction[]>([]);
+  const [attrSearch, setAttrSearch] = useState('');
+  const [copied, setCopied] = useState(false);
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -224,6 +228,63 @@ export default function TripDetailPage() {
       { id: item.id, day_number: item.day_number, order_in_day: swap.order_in_day },
       { id: swap.id, day_number: swap.day_number, order_in_day: item.order_in_day },
     ]);
+  };
+
+  const deleteItem = async (item: ItineraryItem) => {
+    setItinerary(prev => prev.filter(i => i.id !== item.id));
+    try {
+      await axios.delete(
+        `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}/items/${item.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (e) { console.error('delete item', e); }
+  };
+
+  const deleteTrip = async () => {
+    if (!confirm('Excluir esta viagem permanentemente? Esta ação não pode ser desfeita.')) return;
+    try {
+      await axios.delete(
+        `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      router.push('/trips');
+    } catch (e) { console.error('delete trip', e); }
+  };
+
+  const shareTrip = async () => {
+    const url = `${window.location.origin}/shared/${tripId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { prompt('Copie o link da sua viagem:', url); }
+  };
+
+  const openAddModal = async (day: number) => {
+    setAttrSearch('');
+    setAddModalDay(day);
+    try {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/available-attractions`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAvailableAttractions(res.data);
+    } catch (e) { console.error('available attractions', e); }
+  };
+
+  const addAttractionToDay = async (attraction: Attraction, day: number) => {
+    const dayItems = itinerary.filter(i => i.day_number === day);
+    const newOrder = dayItems.reduce((m, i) => Math.max(m, i.order_in_day), 0) + 1;
+    try {
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
+        { attraction_id: attraction.id, day_number: day, order_in_day: newOrder, notes: '' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setItinerary(prev => [...prev, res.data]);
+      setAvailableAttractions(prev => prev.filter(a => a.id !== attraction.id));
+      setAddModalDay(null);
+    } catch (e) { console.error('add attraction', e); }
   };
 
   const updateDayNote = (day: number, text: string) => {
@@ -343,6 +404,14 @@ export default function TripDetailPage() {
           <Link href="/trips" className="text-white/90 hover:text-white font-medium flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm transition">
             ← Minhas Viagens
           </Link>
+        </div>
+        <div className="absolute top-4 right-6 flex gap-2 print:hidden">
+          <button onClick={shareTrip} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1 hover:bg-white/30 transition">
+            {copied ? '✅ Copiado!' : '🔗 Compartilhar'}
+          </button>
+          <button onClick={deleteTrip} title="Excluir viagem" className="bg-red-500/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm hover:bg-red-600/80 transition">
+            🗑️
+          </button>
         </div>
         <div className="absolute bottom-6 left-6 right-6">
           {trip.destinations && trip.destinations.length > 1 ? (
@@ -600,6 +669,11 @@ export default function TripDetailPage() {
                                     <option key={d} value={d}>Dia {d}</option>
                                   ))}
                                 </select>
+                                <button
+                                  onClick={() => deleteItem(item)}
+                                  title="Remover"
+                                  className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600 transition text-sm flex-shrink-0"
+                                >×</button>
                               </div>
                             ) : (
                               <div
@@ -665,6 +739,15 @@ export default function TripDetailPage() {
                     )}
                   </div>
 
+                  {isReordering && (
+                    <button
+                      onClick={() => openAddModal(dayIndex + 1)}
+                      className="w-full flex items-center justify-center gap-2 py-3 text-sm text-brand-teal font-medium hover:bg-teal-50 transition border-t border-dashed border-gray-200"
+                    >
+                      <span className="text-lg">➕</span> Adicionar atração neste dia
+                    </button>
+                  )}
+
                   {dayPoints.length > 0 && (
                     <div className="border-t border-gray-100">
                       <ItineraryMap points={dayPoints} />
@@ -686,6 +769,55 @@ export default function TripDetailPage() {
           </div>
         )}
       </main>
+
+      {addModalDay !== null && (
+        <div className="fixed inset-0 z-[9998] flex items-end sm:items-center justify-center" onClick={() => setAddModalDay(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Adicionar ao Dia {addModalDay}</h3>
+              <button onClick={() => setAddModalDay(null)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500">✕</button>
+            </div>
+            <div className="px-4 py-3 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="🔍 Buscar atração..."
+                value={attrSearch}
+                onChange={e => setAttrSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-teal"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {availableAttractions
+                .filter(a => !attrSearch || a.name.toLowerCase().includes(attrSearch.toLowerCase()) || a.city.toLowerCase().includes(attrSearch.toLowerCase()))
+                .map(a => {
+                  const icon = CATEGORY_ICONS[a.category || ''] || '📍';
+                  const dur = Math.floor(a.visit_duration_minutes / 60) > 0
+                    ? `${Math.floor(a.visit_duration_minutes / 60)}h${a.visit_duration_minutes % 60 > 0 ? (a.visit_duration_minutes % 60) + 'min' : ''}`
+                    : `${a.visit_duration_minutes}min`;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => addAttractionToDay(a, addModalDay!)}
+                      className="w-full flex items-center gap-3 px-5 py-3 hover:bg-teal-50 transition border-b border-gray-100 last:border-0 text-left"
+                    >
+                      <span className="text-2xl flex-shrink-0">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 truncate text-sm">{a.name}</p>
+                        <p className="text-xs text-gray-400">{a.city} • ⏱ {dur}</p>
+                      </div>
+                      <span className="text-brand-teal font-bold text-lg">+</span>
+                    </button>
+                  );
+                })}
+              {availableAttractions.filter(a => !attrSearch || a.name.toLowerCase().includes(attrSearch.toLowerCase())).length === 0 && (
+                <p className="text-gray-400 text-sm text-center py-8">Nenhuma atração disponível.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedAttraction && (
         <AttractionModal

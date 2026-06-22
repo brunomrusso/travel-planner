@@ -112,6 +112,54 @@ async def _ensure_attractions_for_city(city: str, supabase) -> int:
     print(f"Saved {saved} attractions for '{city}'")
     return saved
 
+@router.get("/{trip_id}/share")
+async def get_shared_trip(trip_id: UUID):
+    supabase = get_supabase()
+    try:
+        trip_resp = supabase.table("trips").select("*").eq("id", str(trip_id)).execute()
+        if not trip_resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        trip = trip_resp.data[0]
+        itin_resp = (
+            supabase.table("itineraries").select("*")
+            .eq("trip_id", str(trip_id))
+            .order("day_number", desc=False)
+            .order("order_in_day", desc=False)
+            .execute()
+        )
+        itinerary = itin_resp.data or []
+        attr_ids = list({item["attraction_id"] for item in itinerary if item.get("attraction_id")})
+        attractions: list = []
+        if attr_ids:
+            attrs_resp = supabase.table("attractions").select("*").in_("id", attr_ids).execute()
+            attractions = attrs_resp.data or []
+        return {"trip": trip, "itinerary": itinerary, "attractions": attractions}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/{trip_id}/available-attractions")
+async def get_available_attractions(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
+    supabase = get_supabase()
+    try:
+        trip_resp = supabase.table("trips").select("*").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        trip = trip_resp.data[0]
+        destinations = trip.get("destinations") or [{"city": trip["destination_city"]}]
+        all_attrs: list = []
+        for dest in destinations:
+            resp = supabase.table("attractions").select("*").eq("city", dest["city"]).execute()
+            all_attrs.extend(resp.data or [])
+        itin_resp = supabase.table("itineraries").select("attraction_id").eq("trip_id", str(trip_id)).execute()
+        in_itin = {item["attraction_id"] for item in (itin_resp.data or [])}
+        return [a for a in all_attrs if a["id"] not in in_itin]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 @router.post("/{trip_id}/generate-itinerary")
 async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
     supabase = get_supabase()

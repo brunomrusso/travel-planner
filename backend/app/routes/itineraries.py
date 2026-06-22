@@ -86,3 +86,17 @@ async def reorder_itinerary(trip_id: UUID, updates: List[ReorderItem], user_id: 
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/{trip_id}/items/{item_id}")
+async def delete_itinerary_item(trip_id: UUID, item_id: str, user_id: str = Depends(get_user_id_from_token)):
+    supabase = get_supabase()
+    try:
+        trip_response = supabase.table("trips").select("id").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        supabase.table("itineraries").delete().eq("id", item_id).eq("trip_id", str(trip_id)).execute()
+        return {"message": "Item deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

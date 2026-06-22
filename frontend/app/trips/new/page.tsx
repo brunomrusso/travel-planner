@@ -29,11 +29,12 @@ interface DestEntry {
   suggestions: CityOption[];
   showSuggestions: boolean;
   isSearching: boolean;
+  days: number;
 }
 
 const emptyDest = (): DestEntry => ({
   city: '', country: '', country_code: '', query: '',
-  valid: null, suggestions: [], showSuggestions: false, isSearching: false,
+  valid: null, suggestions: [], showSuggestions: false, isSearching: false, days: 1,
 });
 
 
@@ -115,8 +116,35 @@ export default function NewTripPage() {
     ));
   };
 
-  const addDestination = () => setDestinations(prev => [...prev, emptyDest()]);
-  const removeDestination = (idx: number) => setDestinations(prev => prev.filter((_, i) => i !== idx));
+  const tripDays = formData.start_date && formData.end_date
+    ? Math.ceil((new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) / 86400000) + 1
+    : 0;
+
+  const distributeDaysEvenly = (dests: DestEntry[], total: number): DestEntry[] => {
+    if (dests.length === 0 || total <= 0) return dests;
+    const base = Math.floor(total / dests.length);
+    return dests.map((d, i) => ({
+      ...d,
+      days: i === dests.length - 1 ? total - base * (dests.length - 1) : base,
+    }));
+  };
+
+  const addDestination = () => {
+    setDestinations(prev => {
+      const next = [...prev, emptyDest()];
+      return tripDays > 0 ? distributeDaysEvenly(next, tripDays) : next;
+    });
+  };
+  const removeDestination = (idx: number) => {
+    setDestinations(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      return tripDays > 0 ? distributeDaysEvenly(next, tripDays) : next;
+    });
+  };
+
+  const setDestDays = (idx: number, val: number) => {
+    setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, days: Math.max(1, val) } : d));
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -139,7 +167,7 @@ export default function NewTripPage() {
     try {
       const { data } = await getSession();
       if (!data?.session) { router.push('/login'); return; }
-      const destList = destinations.map(d => ({ city: d.city, country: d.country, country_code: d.country_code }));
+      const destList = destinations.map(d => ({ city: d.city, country: d.country, country_code: d.country_code, ...(destinations.length > 1 ? { days: d.days } : {}) }));
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/`,
         {
@@ -263,8 +291,30 @@ export default function NewTripPage() {
               ))}
             </div>
 
-            {destinations.length > 1 && (
-              <p className="text-xs text-gray-400 mt-2">Os dias serão divididos igualmente entre as cidades.</p>
+            {destinations.length > 1 && tripDays > 0 && (
+              <div className="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dias por cidade</p>
+                {destinations.map((dest, idx) => (
+                  dest.valid ? (
+                    <div key={idx} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-gray-700 flex items-center gap-1 flex-1 min-w-0 truncate">
+                        {dest.country_code && <FlagImg code={dest.country_code} size="sm" />} {dest.city}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setDestDays(idx, dest.days - 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">−</button>
+                        <span className="w-8 text-center font-semibold text-gray-900 text-sm">{dest.days}</span>
+                        <button type="button" onClick={() => setDestDays(idx, dest.days + 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">+</button>
+                      </div>
+                    </div>
+                  ) : null
+                ))}
+                <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                  <span className="text-xs text-gray-500">Total</span>
+                  <span className={`text-xs font-semibold ${destinations.reduce((s, d) => s + d.days, 0) === tripDays ? 'text-green-600' : 'text-red-500'}`}>
+                    {destinations.reduce((s, d) => s + d.days, 0)} / {tripDays} dias
+                  </span>
+                </div>
+              </div>
             )}
           </div>
 
