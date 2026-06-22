@@ -69,14 +69,20 @@ export default function AttractionModal({ name, city, category, durationStr, add
     });
   }, [name, city]);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center"
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up"
+        className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden animate-slide-up max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle (mobile) */}
@@ -101,7 +107,7 @@ export default function AttractionModal({ name, city, category, durationStr, add
         )}
 
         {/* Conteúdo */}
-        <div className="p-5">
+        <div className="p-5 overflow-y-auto flex-1">
           <div className="flex justify-between items-start gap-3 mb-3">
             <div>
               <h2 className="text-xl font-bold text-gray-900 leading-tight">{name}</h2>
@@ -124,7 +130,7 @@ export default function AttractionModal({ name, city, category, durationStr, add
             </div>
           ) : info ? (
             <>
-              <p className="text-gray-700 text-sm leading-relaxed line-clamp-6">{info.extract}</p>
+              <p className="text-gray-700 text-sm leading-relaxed">{info.extract}</p>
               <a
                 href={info.url}
                 target="_blank"
