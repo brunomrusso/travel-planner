@@ -8,6 +8,7 @@ import axios from 'axios';
 import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
+import AttractionModal from '@/components/AttractionModal';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -56,6 +57,7 @@ interface Attraction {
   latitude: number;
   longitude: number;
   visit_duration_minutes: number;
+  address?: string;
 }
 
 interface ItineraryItem {
@@ -88,6 +90,9 @@ export default function TripDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const [selectedAttraction, setSelectedAttraction] = useState<{
+    name: string; city: string; category: string; durationStr: string; address?: string;
+  } | null>(null);
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -377,13 +382,23 @@ export default function TripDetailPage() {
 
                         return (
                           <div key={item.id}>
-                            <div className="flex items-center gap-4 p-5 hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-4 p-5 hover:bg-teal-50/60 active:bg-teal-50 transition border-b border-gray-100 last:border-0 text-left group"
+                              onClick={() => attraction && setSelectedAttraction({
+                                name: attraction.name,
+                                city: attraction.city || trip.destination_city,
+                                category: categoryPt,
+                                durationStr,
+                                address: attraction.address,
+                              })}
+                            >
                               <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
                                 {index + 1}
                               </div>
                               <div className="text-2xl flex-shrink-0">{icon}</div>
                               <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-gray-900 truncate">{attraction?.name || 'Atração'}</h4>
+                                <h4 className="font-bold text-gray-900 truncate group-hover:text-brand-teal transition">{attraction?.name || 'Atração'}</h4>
                                 <p className="text-sm text-gray-500 flex items-center gap-2">
                                   {item.start_time && (
                                     <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
@@ -391,12 +406,13 @@ export default function TripDetailPage() {
                                   <span>{categoryPt}</span>
                                 </p>
                               </div>
-                              <div className="flex-shrink-0 text-right">
+                              <div className="flex-shrink-0 flex items-center gap-2">
                                 <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                                   ⏱ {durationStr}
                                 </span>
+                                <span className="text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
                               </div>
-                            </div>
+                            </button>
                             {travelConnector}
                           </div>
                         );
@@ -415,6 +431,17 @@ export default function TripDetailPage() {
           </div>
         )}
       </main>
+
+      {selectedAttraction && (
+        <AttractionModal
+          name={selectedAttraction.name}
+          city={selectedAttraction.city}
+          category={selectedAttraction.category}
+          durationStr={selectedAttraction.durationStr}
+          address={selectedAttraction.address}
+          onClose={() => setSelectedAttraction(null)}
+        />
+      )}
     </div>
   );
 }
