@@ -76,7 +76,7 @@ export default function PassportPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [selectedVisits, setSelectedVisits] = useState<Country[] | null>(null);
   const [view, setView] = useState<'stamps' | 'timeline'>('stamps');
 
   useEffect(() => {
@@ -141,6 +141,19 @@ export default function PassportPage() {
     ...Object.keys(yearGroups).filter(k => k !== 'sem-data').sort((a, b) => Number(a) - Number(b)),
     ...(yearGroups['sem-data'] ? ['sem-data'] : []),
   ];
+
+  // Deduplicated countries for stamps (one stamp per country, badge if visited multiple times)
+  const countryVisitMap: Record<string, Country[]> = {};
+  sortedCountries.forEach(c => {
+    const key = c.country_code.toLowerCase();
+    if (!countryVisitMap[key]) countryVisitMap[key] = [];
+    countryVisitMap[key].push(c);
+  });
+  const stampCountries = Object.values(countryVisitMap).map(visits => ({
+    ...visits[visits.length - 1],
+    visitCount: visits.length,
+    allVisits: visits,
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-white">
@@ -274,18 +287,23 @@ export default function PassportPage() {
             </div>
           ) : view === 'stamps' ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
-              {sortedCountries.map((c, i) => (
+              {stampCountries.map((sc, i) => (
                 <button
-                  key={c.country_code + i}
-                  onClick={() => setSelectedCountry(c)}
+                  key={sc.country_code + i}
+                  onClick={() => setSelectedVisits(sc.allVisits)}
                   style={{ transform: `rotate(${ROTATIONS[i % ROTATIONS.length]}deg)` }}
-                  className="border-2 border-dashed border-teal-400 rounded-xl p-2 sm:p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="relative border-2 border-dashed border-teal-400 rounded-xl p-2 sm:p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
                 >
-                  <FlagImg code={c.country_code} size="xl" className="rounded shadow-sm" />
+                  {sc.visitCount > 1 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-teal-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center z-10">
+                      {sc.visitCount}
+                    </span>
+                  )}
+                  <FlagImg code={sc.country_code} size="xl" className="rounded shadow-sm" />
                   <div className="w-full border-t border-dashed border-teal-300 my-2" />
-                  <p className="text-teal-900 text-xs font-bold text-center leading-tight">{c.country || c.country_code.toUpperCase()}</p>
-                  {c.city && <p className="text-teal-600/70 text-xs truncate w-full text-center mt-0.5">{c.city}</p>}
-                  {c.year && <p className="text-teal-500 text-xs font-semibold mt-0.5">{c.year}</p>}
+                  <p className="text-teal-900 text-xs font-bold text-center leading-tight">{sc.country || sc.country_code.toUpperCase()}</p>
+                  {sc.city && <p className="text-teal-600/70 text-xs truncate w-full text-center mt-0.5">{sc.city}</p>}
+                  {sc.year && <p className="text-teal-500 text-xs font-semibold mt-0.5">{sc.year}</p>}
                 </button>
               ))}
             </div>
@@ -327,7 +345,7 @@ export default function PassportPage() {
                     {yearGroups[yearKey].map((c, ci) => (
                       <button
                         key={c.country_code + ci}
-                        onClick={() => setSelectedCountry(c)}
+                        onClick={() => setSelectedVisits([c])}
                         className="flex items-center gap-3 bg-gray-50 hover:bg-teal-50 border border-gray-100 hover:border-teal-200 rounded-xl px-4 py-3 text-left transition-all group"
                       >
                         <FlagImg code={c.country_code} size="lg" className="rounded flex-shrink-0" />
@@ -363,46 +381,76 @@ export default function PassportPage() {
       </div>
 
       {/* Country detail sheet */}
-      {selectedCountry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSelectedCountry(null)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 z-10"
-            onClick={e => e.stopPropagation()}
-          >
-            <button onClick={() => setSelectedCountry(null)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition">
-              <X size={16} />
-            </button>
-            <div className="flex items-center gap-4 mb-5">
-              <FlagImg code={selectedCountry.country_code} size="xl" className="rounded-lg shadow-sm flex-shrink-0" />
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 leading-tight">{selectedCountry.country || selectedCountry.country_code.toUpperCase()}</h3>
-                {selectedCountry.city && <p className="text-gray-500 text-sm mt-0.5">{selectedCountry.city}</p>}
+      {selectedVisits && selectedVisits.length > 0 && (() => {
+        const first = selectedVisits[0];
+        const multi = selectedVisits.length > 1;
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSelectedVisits(null)}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div
+              className="relative bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 z-10"
+              onClick={e => e.stopPropagation()}
+            >
+              <button onClick={() => setSelectedVisits(null)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition">
+                <X size={16} />
+              </button>
+
+              <div className="flex items-center gap-4 mb-5">
+                <FlagImg code={first.country_code} size="xl" className="rounded-lg shadow-sm flex-shrink-0" />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 leading-tight">{first.country || first.country_code.toUpperCase()}</h3>
+                  {multi ? (
+                    <span className="inline-block mt-1 text-xs font-semibold bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
+                      {selectedVisits.length} visitas
+                    </span>
+                  ) : first.city ? (
+                    <p className="text-gray-500 text-sm mt-0.5">{first.city}</p>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              {selectedCountry.year && (
-                <div className="flex items-center bg-teal-50 rounded-xl px-4 py-2.5">
-                  <span className="text-teal-700 text-sm font-medium">Ano da visita</span>
-                  <span className="ml-auto font-bold text-teal-900">{selectedCountry.year}</span>
-                </div>
-              )}
-              {CONTINENT[selectedCountry.country_code.toLowerCase()] && (
-                <div className={`flex items-center rounded-xl px-4 py-2.5 border ${CONT_STYLE[CONTINENT[selectedCountry.country_code.toLowerCase()]] || 'bg-gray-50 border-gray-200 text-gray-700'}`}>
-                  <span className="text-sm font-medium">Continente</span>
-                  <span className="ml-auto font-semibold text-sm">{CONTINENT[selectedCountry.country_code.toLowerCase()]}</span>
-                </div>
-              )}
-              <div className="flex items-center bg-gray-50 rounded-xl px-4 py-2.5">
-                <span className="text-gray-600 text-sm font-medium">Origem</span>
-                <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-700">
-                  {selectedCountry.source === 'manual' ? 'Adicionado manualmente' : 'Viagem registrada'}
-                </span>
+
+              <div className="space-y-2">
+                {multi ? (
+                  // Multiple visits: list each
+                  selectedVisits.map((v, i) => (
+                    <div key={i} className="flex items-center bg-teal-50 rounded-xl px-4 py-2.5 gap-2">
+                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-teal-500 text-white text-[10px] font-bold flex-shrink-0">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        {v.year && <span className="font-bold text-teal-900 text-sm">{v.year}</span>}
+                        {v.city && <span className="text-teal-600/70 text-xs ml-1.5">· {v.city}</span>}
+                        {!v.year && !v.city && <span className="text-teal-600 text-sm">Visita {i + 1}</span>}
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{v.source === 'manual' ? 'manual' : 'viagem'}</span>
+                    </div>
+                  ))
+                ) : (
+                  // Single visit
+                  <>
+                    {first.year && (
+                      <div className="flex items-center bg-teal-50 rounded-xl px-4 py-2.5">
+                        <span className="text-teal-700 text-sm font-medium">Ano da visita</span>
+                        <span className="ml-auto font-bold text-teal-900">{first.year}</span>
+                      </div>
+                    )}
+                    {CONTINENT[first.country_code.toLowerCase()] && (
+                      <div className={`flex items-center rounded-xl px-4 py-2.5 border ${CONT_STYLE[CONTINENT[first.country_code.toLowerCase()]] || 'bg-gray-50 border-gray-200 text-gray-700'}`}>
+                        <span className="text-sm font-medium">Continente</span>
+                        <span className="ml-auto font-semibold text-sm">{CONTINENT[first.country_code.toLowerCase()]}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center bg-gray-50 rounded-xl px-4 py-2.5">
+                      <span className="text-gray-600 text-sm font-medium">Origem</span>
+                      <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-700">
+                        {first.source === 'manual' ? 'Adicionado manualmente' : 'Viagem registrada'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
