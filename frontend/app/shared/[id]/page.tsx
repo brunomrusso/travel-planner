@@ -75,7 +75,10 @@ export default function SharedTripPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-gradient-to-r from-teal-600 to-teal-800 text-white py-12 px-4">
         <div className="max-w-3xl mx-auto">
-          <p className="text-teal-200 text-sm mb-2">✈️ Roteiria — Roteiro Compartilhado</p>
+          <p className="text-teal-200 text-sm mb-2 flex items-center gap-2">
+            <img src="/icons/icon.svg" alt="Roteiria" className="w-5 h-5 rounded" />
+            Roteiria — Roteiro Compartilhado
+          </p>
           <h1 className="text-4xl font-bold">{trip.destination_city}</h1>
           <p className="text-teal-100 mt-2">📅 {startFmt} → {endFmt} • {days} {days === 1 ? 'dia' : 'dias'} • {itinerary.length} atrações</p>
         </div>

@@ -40,7 +40,10 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
       <nav className="bg-white shadow-md border-b-4 border-brand-teal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-brand-teal">✈️ Roteiria</h1>
+          <h1 className="text-2xl font-bold text-brand-teal flex items-center gap-2">
+            <img src="/icons/icon.svg" alt="" className="w-8 h-8 rounded-lg" />
+            Roteiria
+          </h1>
           <div className="space-x-4">
             <Link href="/login" className="text-gray-600 hover:text-brand-teal font-medium">
               Entrar

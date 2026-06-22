@@ -72,7 +72,10 @@ export default function ProfilePage() {
           <Link href="/trips" className="text-gray-400 hover:text-brand-teal transition">
             ← Voltar
           </Link>
-          <h1 className="text-xl font-bold text-brand-teal">✈️ Roteiria</h1>
+          <h1 className="text-xl font-bold text-brand-teal flex items-center gap-2">
+            <img src="/icons/icon.svg" alt="" className="w-7 h-7 rounded-lg" />
+            Roteiria
+          </h1>
         </div>
       </nav>
 
