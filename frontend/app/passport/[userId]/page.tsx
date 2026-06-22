@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Plus, Share2 } from 'lucide-react';
+import { ArrowLeft, Plus, Share2, X } from 'lucide-react';
 import FlagImg from '@/components/FlagImg';
 
 const WorldMap = dynamic(() => import('@/components/WorldMap'), { ssr: false });
@@ -24,6 +24,45 @@ function getTravelerTitle(count: number) {
 
 const ROTATIONS = [-4, 2, -2, 3, -3, 1, -1, 4];
 
+const CONTINENT: Record<string, string> = {
+  dz:'África',ao:'África',bj:'África',bw:'África',bf:'África',bi:'África',cm:'África',
+  cv:'África',cf:'África',td:'África',km:'África',cd:'África',cg:'África',ci:'África',
+  dj:'África',eg:'África',gq:'África',er:'África',et:'África',ga:'África',gm:'África',
+  gh:'África',gn:'África',gw:'África',ke:'África',ls:'África',lr:'África',ly:'África',
+  mg:'África',mw:'África',ml:'África',mr:'África',mu:'África',ma:'África',mz:'África',
+  na:'África',ne:'África',ng:'África',rw:'África',st:'África',sn:'África',sl:'África',
+  so:'África',za:'África',ss:'África',sd:'África',sz:'África',tz:'África',tg:'África',
+  tn:'África',ug:'África',zm:'África',zw:'África',sc:'África',
+  ag:'Américas',ar:'Américas',bs:'Américas',bb:'Américas',bz:'Américas',bo:'Américas',
+  br:'Américas',ca:'Américas',cl:'Américas',co:'Américas',cr:'Américas',cu:'Américas',
+  dm:'Américas',do:'Américas',ec:'Américas',sv:'Américas',gd:'Américas',gt:'Américas',
+  gy:'Américas',ht:'Américas',hn:'Américas',jm:'Américas',mx:'Américas',ni:'Américas',
+  pa:'Américas',py:'Américas',pe:'Américas',kn:'Américas',lc:'Américas',vc:'Américas',
+  sr:'Américas',tt:'Américas',us:'Américas',uy:'Américas',ve:'Américas',
+  af:'Ásia',am:'Ásia',az:'Ásia',bh:'Ásia',bd:'Ásia',bt:'Ásia',bn:'Ásia',kh:'Ásia',
+  cn:'Ásia',cy:'Ásia',ge:'Ásia',in:'Ásia',id:'Ásia',ir:'Ásia',iq:'Ásia',il:'Ásia',
+  jp:'Ásia',jo:'Ásia',kz:'Ásia',kw:'Ásia',kg:'Ásia',la:'Ásia',lb:'Ásia',my:'Ásia',
+  mv:'Ásia',mn:'Ásia',mm:'Ásia',np:'Ásia',kp:'Ásia',om:'Ásia',pk:'Ásia',ph:'Ásia',
+  qa:'Ásia',sa:'Ásia',sg:'Ásia',kr:'Ásia',lk:'Ásia',sy:'Ásia',tj:'Ásia',th:'Ásia',
+  tl:'Ásia',tr:'Ásia',tm:'Ásia',ae:'Ásia',uz:'Ásia',vn:'Ásia',ye:'Ásia',
+  al:'Europa',ad:'Europa',at:'Europa',by:'Europa',be:'Europa',ba:'Europa',bg:'Europa',
+  hr:'Europa',cz:'Europa',dk:'Europa',ee:'Europa',fi:'Europa',fr:'Europa',de:'Europa',
+  gr:'Europa',hu:'Europa',is:'Europa',ie:'Europa',it:'Europa',lv:'Europa',li:'Europa',
+  lt:'Europa',lu:'Europa',mk:'Europa',mt:'Europa',md:'Europa',mc:'Europa',me:'Europa',
+  nl:'Europa',no:'Europa',pl:'Europa',pt:'Europa',ro:'Europa',ru:'Europa',sm:'Europa',
+  rs:'Europa',sk:'Europa',si:'Europa',es:'Europa',se:'Europa',ch:'Europa',ua:'Europa',gb:'Europa',
+  au:'Oceania',fj:'Oceania',ki:'Oceania',mh:'Oceania',nr:'Oceania',nz:'Oceania',
+  pw:'Oceania',pg:'Oceania',ws:'Oceania',sb:'Oceania',to:'Oceania',tv:'Oceania',vu:'Oceania',
+};
+
+const CONT_STYLE: Record<string, string> = {
+  'África':   'bg-amber-50 border-amber-200 text-amber-800',
+  'Américas': 'bg-green-50 border-green-200 text-green-800',
+  'Ásia':     'bg-red-50 border-red-200 text-red-800',
+  'Europa':   'bg-blue-50 border-blue-200 text-blue-800',
+  'Oceania':  'bg-purple-50 border-purple-200 text-purple-800',
+};
+
 interface Country { country: string; country_code: string; year?: number; city?: string; source?: string; }
 interface PassportData {
   display_name: string;
@@ -37,6 +76,7 @@ export default function PassportPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/passport`)
@@ -75,6 +115,20 @@ export default function PassportPage() {
     return a.year - b.year;
   });
   const visitedCodes = sortedCountries.map(c => c.country_code);
+
+  const nextTitle = TRAVELER_TITLES.find(t => t.min > data.stats.countries);
+  const progressPct = nextTitle
+    ? Math.round(((data.stats.countries - title.min) / (nextTitle.min - title.min)) * 100)
+    : 100;
+  const worldPct = Math.round((data.stats.countries / 195) * 100);
+
+  const continentMap: Record<string, Country[]> = {};
+  sortedCountries.forEach(c => {
+    const cont = CONTINENT[c.country_code.toLowerCase()] || 'Outros';
+    if (!continentMap[cont]) continentMap[cont] = [];
+    continentMap[cont].push(c);
+  });
+  const continentEntries = Object.entries(continentMap).sort((a, b) => b[1].length - a[1].length);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-white">
@@ -123,6 +177,21 @@ export default function PassportPage() {
               </div>
             ))}
           </div>
+
+          {/* Progress to next title */}
+          <div className="mt-5 px-1">
+            <div className="flex justify-between text-xs text-teal-300 mb-1.5">
+              <span>{title.icon} {title.label}</span>
+              {nextTitle
+                ? <span>{nextTitle.icon} {nextTitle.label} em {nextTitle.min - data.stats.countries} pa{nextTitle.min - data.stats.countries === 1 ? 'ís' : 'íses'}</span>
+                : <span>🏆 Nível máximo!</span>}
+            </div>
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-full bg-teal-300 rounded-full transition-all duration-700" style={{ width: `${progressPct}%` }} />
+            </div>
+          </div>
+
+          <p className="text-teal-400/80 text-xs mt-3">{data.stats.countries} de 195 países visitados ({worldPct}% do mundo)</p>
         </div>
       </div>
 
@@ -135,6 +204,24 @@ export default function PassportPage() {
           <WorldMap visitedCodes={visitedCodes} />
         </div>
       </div>
+
+      {/* Continent breakdown */}
+      {continentEntries.length > 0 && (
+        <div className="max-w-3xl mx-auto px-4 pb-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Por Continente</p>
+            <div className="flex flex-wrap gap-2">
+              {continentEntries.map(([cont, countries]) => (
+                <div key={cont} className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${CONT_STYLE[cont] || 'bg-gray-50 border-gray-200 text-gray-700'}`}>
+                  <FlagImg code={countries[0].country_code} size="sm" />
+                  <span className="text-sm font-semibold">{cont}</span>
+                  <span className="text-xs font-bold bg-white/60 rounded-full px-1.5 py-0.5">{countries.length}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stamps */}
       <div className="max-w-3xl mx-auto px-4 pb-10">
@@ -156,17 +243,18 @@ export default function PassportPage() {
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
               {sortedCountries.map((c, i) => (
-                <div
+                <button
                   key={c.country_code + i}
+                  onClick={() => setSelectedCountry(c)}
                   style={{ transform: `rotate(${ROTATIONS[i % ROTATIONS.length]}deg)` }}
-                  className="border-2 border-dashed border-teal-400 rounded-xl p-2 sm:p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md transition"
+                  className="border-2 border-dashed border-teal-400 rounded-xl p-2 sm:p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
                 >
                   <FlagImg code={c.country_code} size="xl" className="rounded shadow-sm" />
                   <div className="w-full border-t border-dashed border-teal-300 my-2" />
                   <p className="text-teal-900 text-xs font-bold text-center leading-tight">{c.country || c.country_code.toUpperCase()}</p>
                   {c.city && <p className="text-teal-600/70 text-xs truncate w-full text-center mt-0.5">{c.city}</p>}
                   {c.year && <p className="text-teal-500 text-xs font-semibold mt-0.5">{c.year}</p>}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -178,6 +266,48 @@ export default function PassportPage() {
           ✈️ Crie seu passaporte no Roteiria — grátis
         </Link>
       </div>
+
+      {/* Country detail sheet */}
+      {selectedCountry && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSelectedCountry(null)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 z-10"
+            onClick={e => e.stopPropagation()}
+          >
+            <button onClick={() => setSelectedCountry(null)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition">
+              <X size={16} />
+            </button>
+            <div className="flex items-center gap-4 mb-5">
+              <FlagImg code={selectedCountry.country_code} size="xl" className="rounded-lg shadow-sm flex-shrink-0" />
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 leading-tight">{selectedCountry.country || selectedCountry.country_code.toUpperCase()}</h3>
+                {selectedCountry.city && <p className="text-gray-500 text-sm mt-0.5">{selectedCountry.city}</p>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {selectedCountry.year && (
+                <div className="flex items-center bg-teal-50 rounded-xl px-4 py-2.5">
+                  <span className="text-teal-700 text-sm font-medium">Ano da visita</span>
+                  <span className="ml-auto font-bold text-teal-900">{selectedCountry.year}</span>
+                </div>
+              )}
+              {CONTINENT[selectedCountry.country_code.toLowerCase()] && (
+                <div className={`flex items-center rounded-xl px-4 py-2.5 border ${CONT_STYLE[CONTINENT[selectedCountry.country_code.toLowerCase()]] || 'bg-gray-50 border-gray-200 text-gray-700'}`}>
+                  <span className="text-sm font-medium">Continente</span>
+                  <span className="ml-auto font-semibold text-sm">{CONTINENT[selectedCountry.country_code.toLowerCase()]}</span>
+                </div>
+              )}
+              <div className="flex items-center bg-gray-50 rounded-xl px-4 py-2.5">
+                <span className="text-gray-600 text-sm font-medium">Origem</span>
+                <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-700">
+                  {selectedCountry.source === 'manual' ? 'Adicionado manualmente' : 'Viagem registrada'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

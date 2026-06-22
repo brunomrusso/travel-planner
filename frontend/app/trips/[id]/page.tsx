@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import AttractionModal from '@/components/AttractionModal';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -402,14 +402,15 @@ export default function TripDetailPage() {
       <CityImage city={trip.destination_city} className="relative h-72 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute top-4 left-6">
-          <Link href="/trips" className="text-white/90 hover:text-white font-medium flex items-center gap-1 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm transition">
-            ← Minhas Viagens
+          <Link href="/trips" className="text-white/90 hover:text-white font-medium flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm transition">
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Minhas Viagens</span>
           </Link>
         </div>
         <div className="absolute top-4 right-6 flex gap-2 print:hidden">
           <button onClick={shareTrip} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-white/30 transition">
             <Share2 size={14} />
-            {copied ? 'Copiado!' : 'Compartilhar'}
+            <span className="hidden sm:inline">{copied ? 'Copiado!' : 'Compartilhar'}</span>
           </button>
           <button onClick={deleteTrip} title="Excluir viagem" className="bg-red-500/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-red-600/80 transition">
             <Trash2 size={14} />
@@ -565,8 +566,8 @@ export default function TripDetailPage() {
                 <div key={dayIndex} className="bg-white rounded-xl shadow-sm overflow-hidden">
                   <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark px-6 py-4 flex justify-between items-center">
                     <div>
-                      <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                        Dia {dayIndex + 1}
+                      <h3 className="text-white font-bold text-lg flex items-center gap-2 flex-wrap">
+                        <span className="whitespace-nowrap">Dia {dayIndex + 1}</span>
                         {(() => { const dk = dayDate.toISOString().split('T')[0]; const w = weatherByDate[dk]; return w ? ( <span className="flex items-center gap-1 bg-white/20 rounded-lg px-2 py-0.5 text-sm font-normal"> <span>{w.icon}</span> <span>{w.maxC}°</span> <span className="opacity-70 text-xs">{w.minC}°</span> </span> ) : null; })()}
                         {(() => {
                           const firstAttr = dayItems[0] ? attractions.find(a => a.id === dayItems[0].attraction_id) : null;
