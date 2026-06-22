@@ -3,9 +3,9 @@ AI-powered travel tips endpoint using Groq (llama3-8b-8192).
 Requires GROQ_API_KEY environment variable.
 Returns gracefully with tips=null if key is not configured.
 """
-from fastapi import APIRouter, Header, HTTPException
-from app.supabase_client import supabase
-from app.auth import get_current_user
+from fastapi import APIRouter, HTTPException, Depends
+from app.database import get_supabase
+from app.auth import get_user_id_from_token
 import httpx
 import os
 import json
@@ -39,15 +39,14 @@ Retorne APENAS um JSON válido (sem markdown, sem texto extra) com esta estrutur
 
 
 @router.get("/trips/{trip_id}/tips")
-async def get_trip_tips(trip_id: str, authorization: str = Header(None)):
+async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_token)):
     groq_key = os.environ.get("GROQ_API_KEY")
     if not groq_key:
         return {"tips": None, "reason": "GROQ_API_KEY not configured"}
 
-    token = (authorization or "").replace("Bearer ", "")
-    user = await get_current_user(token)
+    supabase = get_supabase()
 
-    trip_resp = supabase.table("trips").select("*").eq("id", trip_id).eq("user_id", user["id"]).execute()
+    trip_resp = supabase.table("trips").select("*").eq("id", trip_id).eq("user_id", user_id).execute()
     if not trip_resp.data:
         raise HTTPException(status_code=404, detail="Trip not found")
     trip = trip_resp.data[0]
