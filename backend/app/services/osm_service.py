@@ -51,16 +51,17 @@ class OSMService:
         if not geocoded:
             return []
 
-        bbox = geocoded["bbox"]
+        lat = geocoded["lat"]
+        lon = geocoded["lon"]
+        radius = 25000  # 25 km radius
 
         for category, tags in self.CATEGORY_MAPPING.items():
             for tag in tags:
                 try:
                     query = f"""
-                    [bbox:{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}];
                     (
-                        node[{tag}];
-                        way[{tag}];
+                        node[{tag}](around:{radius},{lat},{lon});
+                        way[{tag}](around:{radius},{lat},{lon});
                     );
                     out center;
                     """
@@ -70,15 +71,15 @@ class OSMService:
                             data = response.json()
                             for element in data.get("elements", []):
                                 if "tags" in element and "name" in element["tags"]:
-                                    lat = element.get("lat") or element.get("center", {}).get("lat")
-                                    lon = element.get("lon") or element.get("center", {}).get("lon")
-                                    if lat and lon:
+                                    e_lat = element.get("lat") or element.get("center", {}).get("lat")
+                                    e_lon = element.get("lon") or element.get("center", {}).get("lon")
+                                    if e_lat and e_lon:
                                         attractions.append({
                                             "osm_id": element.get("id"),
                                             "name": element["tags"]["name"],
                                             "category": category,
-                                            "latitude": lat,
-                                            "longitude": lon,
+                                            "latitude": e_lat,
+                                            "longitude": e_lon,
                                             "rating": 4.0,
                                             "visit_duration_minutes": self.VISIT_DURATION.get(category, 60)
                                         })
@@ -95,18 +96,16 @@ class OSMService:
                     "https://nominatim.openstreetmap.org/search",
                     params={"q": city, "format": "json", "limit": 1},
                     timeout=10.0,
-                    headers={"User-Agent": "TravelPlanner/1.0"}
+                    headers={"User-Agent": "Roteiria/1.0"}
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
                     if data:
                         result = data[0]
-                        bbox = list(map(float, result["boundingbox"]))
                         return {
                             "lat": float(result["lat"]),
                             "lon": float(result["lon"]),
-                            "bbox": [bbox[2], bbox[0], bbox[3], bbox[1]]
                         }
         except Exception as e:
             print(f"Error geocoding city {city}: {e}")
