@@ -97,6 +97,7 @@ export default function TripDetailPage() {
     overview?: string;
     days?: Array<{ day: number; theme: string; tip: string; food: string }>;
   } | null>(null);
+  const [tipsLoading, setTipsLoading] = useState(false);
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -144,13 +145,18 @@ export default function TripDetailPage() {
 
   useEffect(() => {
     if (itinerary.length === 0 || !token) return;
+    setTipsLoading(true);
     axios
       .get(`${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/tips`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 35000,
+        timeout: 40000,
       })
-      .then(res => { if (res.data?.tips) setTips(res.data.tips); })
-      .catch(() => {});
+      .then(res => {
+        if (res.data?.tips) setTips(res.data.tips);
+        else console.warn('[tips]', res.data?.reason || 'no tips returned');
+      })
+      .catch(err => console.error('[tips error]', err?.response?.data || err?.message))
+      .finally(() => setTipsLoading(false));
   }, [itinerary.length, token, tripId]);
 
   const handleGenerateItinerary = async () => {
@@ -315,6 +321,12 @@ export default function TripDetailPage() {
         {itinerary.length > 0 && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+            {tipsLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-400 animate-pulse">
+                <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-brand-teal rounded-full animate-spin" />
+                Gerando dicas do assistente...
+              </div>
+            )}
             {tips?.overview && (
               <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4 flex gap-3 items-start">
                 <span className="text-2xl flex-shrink-0">🌍</span>

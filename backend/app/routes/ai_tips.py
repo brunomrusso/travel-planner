@@ -53,16 +53,24 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
 
     itin_resp = (
         supabase.table("itineraries")
-        .select("day_number, attractions(name)")
+        .select("day_number, attraction_id")
         .eq("trip_id", trip_id)
         .execute()
     )
 
+    itin_data = itin_resp.data or []
+    attr_ids = list({item["attraction_id"] for item in itin_data if item.get("attraction_id")})
+
+    attr_map: dict = {}
+    if attr_ids:
+        attrs_resp = supabase.table("attractions").select("id, name").in_("id", attr_ids).execute()
+        attr_map = {a["id"]: a["name"] for a in (attrs_resp.data or [])}
+
     days_map: dict = {}
-    for item in (itin_resp.data or []):
+    for item in itin_data:
         day = item["day_number"]
-        attr = item.get("attractions") or {}
-        days_map.setdefault(day, []).append(attr.get("name", ""))
+        name = attr_map.get(item.get("attraction_id", ""), "")
+        days_map.setdefault(day, []).append(name)
 
     if not days_map:
         return {"tips": None, "reason": "Itinerary not generated yet"}
