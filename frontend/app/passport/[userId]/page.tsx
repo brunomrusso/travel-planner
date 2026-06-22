@@ -77,6 +77,7 @@ export default function PassportPage() {
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [view, setView] = useState<'stamps' | 'timeline'>('stamps');
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/passport`)
@@ -129,6 +130,17 @@ export default function PassportPage() {
     continentMap[cont].push(c);
   });
   const continentEntries = Object.entries(continentMap).sort((a, b) => b[1].length - a[1].length);
+
+  const yearGroups: Record<string, Country[]> = {};
+  sortedCountries.forEach(c => {
+    const key = c.year ? String(c.year) : 'sem-data';
+    if (!yearGroups[key]) yearGroups[key] = [];
+    yearGroups[key].push(c);
+  });
+  const timelineYears = [
+    ...Object.keys(yearGroups).filter(k => k !== 'sem-data').sort((a, b) => Number(a) - Number(b)),
+    ...(yearGroups['sem-data'] ? ['sem-data'] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-white">
@@ -223,15 +235,35 @@ export default function PassportPage() {
         </div>
       )}
 
-      {/* Stamps */}
+      {/* Stamps / Timeline */}
       <div className="max-w-3xl mx-auto px-4 pb-10">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+
+          {/* Header com tabs */}
           <div className="flex items-center justify-between mb-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Carimbos</p>
+            <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setView('stamps')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  view === 'stamps' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Carimbos
+              </button>
+              <button
+                onClick={() => setView('timeline')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  view === 'timeline' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Linha do Tempo
+              </button>
+            </div>
             <Link href="/profile" className="flex items-center gap-1 text-xs text-brand-teal hover:underline font-medium">
-              <Plus size={12} /> Adicionar país visitado
+              <Plus size={12} /> Adicionar país
             </Link>
           </div>
+
           {sortedCountries.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-5xl mb-3">🌍</p>
@@ -240,7 +272,7 @@ export default function PassportPage() {
                 <Plus size={14} /> Adicionar país visitado
               </Link>
             </div>
-          ) : (
+          ) : view === 'stamps' ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
               {sortedCountries.map((c, i) => (
                 <button
@@ -255,6 +287,69 @@ export default function PassportPage() {
                   {c.city && <p className="text-teal-600/70 text-xs truncate w-full text-center mt-0.5">{c.city}</p>}
                   {c.year && <p className="text-teal-500 text-xs font-semibold mt-0.5">{c.year}</p>}
                 </button>
+              ))}
+            </div>
+          ) : (
+            /* Timeline view */
+            <div className="relative pl-8">
+              {/* Vertical line */}
+              <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-gradient-to-b from-teal-400 via-teal-300 to-gray-200 rounded-full" />
+
+              {timelineYears.map((yearKey, yi) => (
+                <div key={yearKey} className="relative mb-8 last:mb-0">
+                  {/* Year badge */}
+                  <div className="absolute -left-8 flex items-center justify-center">
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                      yearKey === 'sem-data'
+                        ? 'bg-gray-100 border-gray-300'
+                        : 'bg-teal-500 border-teal-300'
+                    }`}>
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                    </div>
+                  </div>
+
+                  {/* Year label */}
+                  <div className="mb-3 ml-1">
+                    <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${
+                      yearKey === 'sem-data'
+                        ? 'bg-gray-100 text-gray-500'
+                        : 'bg-teal-100 text-teal-800'
+                    }`}>
+                      {yearKey === 'sem-data' ? 'Sem data registrada' : yearKey}
+                    </span>
+                    <span className="ml-2 text-xs text-gray-400">
+                      {yearGroups[yearKey].length} pa{yearGroups[yearKey].length === 1 ? 'ís' : 'íses'}
+                    </span>
+                  </div>
+
+                  {/* Country cards for this year */}
+                  <div className="flex flex-col gap-2">
+                    {yearGroups[yearKey].map((c, ci) => (
+                      <button
+                        key={c.country_code + ci}
+                        onClick={() => setSelectedCountry(c)}
+                        className="flex items-center gap-3 bg-gray-50 hover:bg-teal-50 border border-gray-100 hover:border-teal-200 rounded-xl px-4 py-3 text-left transition-all group"
+                      >
+                        <FlagImg code={c.country_code} size="lg" className="rounded flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-800 text-sm group-hover:text-teal-800 transition">
+                            {c.country || c.country_code.toUpperCase()}
+                          </p>
+                          {c.city && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5">{c.city}</p>
+                          )}
+                        </div>
+                        {CONTINENT[c.country_code.toLowerCase()] && (
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 hidden sm:block ${
+                            CONT_STYLE[CONTINENT[c.country_code.toLowerCase()]] || 'bg-gray-50 border-gray-200 text-gray-600'
+                          }`}>
+                            {CONTINENT[c.country_code.toLowerCase()]}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
