@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Plus, Share2 } from 'lucide-react';
+import FlagImg from '@/components/FlagImg';
 
 const WorldMap = dynamic(() => import('@/components/WorldMap'), { ssr: false });
 
@@ -19,12 +20,6 @@ const TRAVELER_TITLES = [
 
 function getTravelerTitle(count: number) {
   return [...TRAVELER_TITLES].reverse().find(t => count >= t.min) || TRAVELER_TITLES[0];
-}
-
-function getFlag(code: string) {
-  return Array.from(code.toUpperCase()).map(c =>
-    String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)
-  ).join('');
 }
 
 const ROTATIONS = [-4, 2, -2, 3, -3, 1, -1, 4];
@@ -159,14 +154,14 @@ export default function PassportPage() {
               </Link>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-5 justify-center py-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4">
               {sortedCountries.map((c, i) => (
                 <div
                   key={c.country_code + i}
                   style={{ transform: `rotate(${ROTATIONS[i % ROTATIONS.length]}deg)` }}
-                  className="w-28 border-2 border-dashed border-teal-400 rounded-xl p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md transition"
+                  className="border-2 border-dashed border-teal-400 rounded-xl p-2 sm:p-3 flex flex-col items-center bg-teal-50/60 shadow-sm hover:shadow-md transition"
                 >
-                  <span className="text-5xl leading-none">{getFlag(c.country_code)}</span>
+                  <FlagImg code={c.country_code} size="xl" className="rounded shadow-sm" />
                   <div className="w-full border-t border-dashed border-teal-300 my-2" />
                   <p className="text-teal-900 text-xs font-bold text-center leading-tight">{c.country || c.country_code.toUpperCase()}</p>
                   {c.city && <p className="text-teal-600/70 text-xs truncate w-full text-center mt-0.5">{c.city}</p>}

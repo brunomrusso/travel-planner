@@ -1,10 +1,10 @@
 interface FlagImgProps {
   code: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
-const SIZE_MAP = { sm: '16x12', md: '24x18', lg: '32x24' };
+const SIZE_MAP = { sm: '16x12', md: '24x18', lg: '32x24', xl: '64x48' };
 
 export default function FlagImg({ code, size = 'md', className = '' }: FlagImgProps) {
   if (!code || code.length !== 2) {
