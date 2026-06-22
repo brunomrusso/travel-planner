@@ -98,7 +98,7 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
                 timeout=30,
             )
         if resp.status_code != 200:
-            return {"tips": None, "reason": "Groq API error"}
+            return {"tips": None, "reason": f"Groq {resp.status_code}", "detail": resp.text[:300]}
 
         content = resp.json()["choices"][0]["message"]["content"]
         start = content.find("{")

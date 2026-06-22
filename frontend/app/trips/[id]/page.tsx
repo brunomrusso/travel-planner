@@ -153,7 +153,7 @@ export default function TripDetailPage() {
       })
       .then(res => {
         if (res.data?.tips) setTips(res.data.tips);
-        else console.warn('[tips]', res.data?.reason || 'no tips returned');
+        else console.warn('[tips]', res.data?.reason, res.data?.detail || '');
       })
       .catch(err => console.error('[tips error]', err?.response?.data || err?.message))
       .finally(() => setTipsLoading(false));
