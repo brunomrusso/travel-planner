@@ -93,6 +93,10 @@ export default function TripDetailPage() {
   const [selectedAttraction, setSelectedAttraction] = useState<{
     name: string; city: string; category: string; durationStr: string; address?: string;
   } | null>(null);
+  const [tips, setTips] = useState<{
+    overview?: string;
+    days?: Array<{ day: number; theme: string; tip: string; food: string }>;
+  } | null>(null);
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -137,6 +141,17 @@ export default function TripDetailPage() {
 
     loadTripData();
   }, [tripId, router]);
+
+  useEffect(() => {
+    if (itinerary.length === 0 || !token) return;
+    axios
+      .get(`${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/tips`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 35000,
+      })
+      .then(res => { if (res.data?.tips) setTips(res.data.tips); })
+      .catch(() => {});
+  }, [itinerary.length, token, tripId]);
 
   const handleGenerateItinerary = async () => {
     setIsGenerating(true);
@@ -300,6 +315,12 @@ export default function TripDetailPage() {
         {itinerary.length > 0 && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+            {tips?.overview && (
+              <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4 flex gap-3 items-start">
+                <span className="text-2xl flex-shrink-0">🌍</span>
+                <p className="text-teal-800 text-sm leading-relaxed">{tips.overview}</p>
+              </div>
+            )}
             {itineraryByDay.map((dayItems, dayIndex) => {
               const dayDate = new Date(trip.start_date + 'T12:00:00');
               dayDate.setDate(dayDate.getDate() + dayIndex);
@@ -343,6 +364,18 @@ export default function TripDetailPage() {
                       {dayDuration > 0 && <p className="text-white/80 text-sm">~{Math.round(dayDuration / 60)}h de atividades</p>}
                     </div>
                   </div>
+
+                  {tips?.days && (() => {
+                    const dt = tips.days!.find(d => d.day === dayIndex + 1);
+                    if (!dt) return null;
+                    return (
+                      <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 space-y-1">
+                        <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">✨ {dt.theme}</p>
+                        <p className="text-sm text-amber-800">💡 {dt.tip}</p>
+                        <p className="text-sm text-amber-800">🍽️ {dt.food}</p>
+                      </div>
+                    );
+                  })()}
 
                   <div>
                     {dayItems.length === 0 ? (

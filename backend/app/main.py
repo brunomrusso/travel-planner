@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routes import auth, trips, attractions, itineraries
+from app.routes import auth, trips, attractions, itineraries, ai_tips
 
 app = FastAPI(
     title="Travel Planner API",
@@ -32,6 +32,7 @@ app.include_router(auth.router)
 app.include_router(trips.router)
 app.include_router(attractions.router)
 app.include_router(itineraries.router)
+app.include_router(ai_tips.router)
 
 @app.get("/")
 async def root():

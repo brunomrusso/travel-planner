@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from uuid import UUID
 from app.services.osrm_service import OSRMService
+from app.services.attractions_fetcher import enrich_city_attractions
 from collections import defaultdict
 import math
 
@@ -54,6 +55,9 @@ class ItineraryOptimizer:
             city_end_day = num_days if is_last else (city_idx + 1) * days_per_city
             city_days = city_end_day - city_start_day + 1
 
+            min_needed = city_days * 5
+            await enrich_city_attractions(self.supabase, city, min_needed)
+
             resp = self.supabase.table("attractions").select("*").eq("city", city).execute()
             attractions = resp.data
             if not attractions:
@@ -90,21 +94,45 @@ class ItineraryOptimizer:
         if not attractions or num_days <= 0:
             return []
 
-        itinerary = []
-        day_order = defaultdict(int)
+        TARGET_MINUTES = 6 * 60   # 6 h of activities per day
+        MIN_PER_DAY = 3
+        MAX_PER_DAY = 7
 
-        # Round-robin: attraction i goes to day (i % num_days) + 1
-        # Correctly handles cases where len(attractions) < num_days
-        for i, attraction in enumerate(attractions):
-            day_number = (i % num_days) + 1
-            day_order[day_number] += 1
+        day_minutes: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
+        day_counts: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
+        itinerary: List[Dict[str, Any]] = []
+
+        def _add(attraction: Dict, day: int):
+            day_counts[day] += 1
+            day_minutes[day] += attraction.get("visit_duration_minutes", 60)
             itinerary.append({
-                "day_number": day_number,
-                "order_in_day": day_order[day_number],
+                "day_number": day,
+                "order_in_day": day_counts[day],
                 "attraction": attraction,
                 "start_time": None,
-                "notes": ""
+                "notes": "",
             })
+
+        # Pass 1: round-robin to guarantee MIN_PER_DAY on every day
+        min_pool = attractions[:MIN_PER_DAY * num_days]
+        remainder = attractions[MIN_PER_DAY * num_days:]
+
+        for i, attr in enumerate(min_pool):
+            _add(attr, (i % num_days) + 1)
+
+        # Pass 2: fill remaining to reach TARGET_MINUTES, pick least-full day
+        for attr in remainder:
+            duration = attr.get("visit_duration_minutes", 60)
+            target_day = min(
+                (d for d in range(1, num_days + 1) if day_counts[d] < MAX_PER_DAY),
+                key=lambda d: day_minutes[d],
+                default=None,
+            )
+            if target_day is None:
+                break
+            if day_minutes[target_day] >= TARGET_MINUTES:
+                break
+            _add(attr, target_day)
 
         return itinerary
     
