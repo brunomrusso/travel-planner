@@ -44,44 +44,44 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
     if not groq_key:
         return {"tips": None, "reason": "GROQ_API_KEY not configured"}
 
-    supabase = get_supabase()
-
-    trip_resp = supabase.table("trips").select("*").eq("id", trip_id).eq("user_id", user_id).execute()
-    if not trip_resp.data:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    trip = trip_resp.data[0]
-
-    itin_resp = (
-        supabase.table("itineraries")
-        .select("day_number, attraction_id")
-        .eq("trip_id", trip_id)
-        .execute()
-    )
-
-    itin_data = itin_resp.data or []
-    attr_ids = list({item["attraction_id"] for item in itin_data if item.get("attraction_id")})
-
-    attr_map: dict = {}
-    if attr_ids:
-        attrs_resp = supabase.table("attractions").select("id, name").in_("id", attr_ids).execute()
-        attr_map = {a["id"]: a["name"] for a in (attrs_resp.data or [])}
-
-    days_map: dict = {}
-    for item in itin_data:
-        day = item["day_number"]
-        name = attr_map.get(item.get("attraction_id", ""), "")
-        days_map.setdefault(day, []).append(name)
-
-    if not days_map:
-        return {"tips": None, "reason": "Itinerary not generated yet"}
-
-    prompt = _build_prompt(
-        city=trip["destination_city"],
-        profile=trip.get("traveler_profile", "cultural"),
-        days_map=days_map,
-    )
-
     try:
+        supabase = get_supabase()
+
+        trip_resp = supabase.table("trips").select("*").eq("id", trip_id).eq("user_id", user_id).execute()
+        if not trip_resp.data:
+            return {"tips": None, "reason": "Trip not found"}
+        trip = trip_resp.data[0]
+
+        itin_resp = (
+            supabase.table("itineraries")
+            .select("day_number, attraction_id")
+            .eq("trip_id", trip_id)
+            .execute()
+        )
+
+        itin_data = itin_resp.data or []
+        attr_ids = list({item["attraction_id"] for item in itin_data if item.get("attraction_id")})
+
+        attr_map: dict = {}
+        if attr_ids:
+            attrs_resp = supabase.table("attractions").select("id, name").in_("id", attr_ids).execute()
+            attr_map = {a["id"]: a["name"] for a in (attrs_resp.data or [])}
+
+        days_map: dict = {}
+        for item in itin_data:
+            day = item["day_number"]
+            name = attr_map.get(item.get("attraction_id", ""), "")
+            days_map.setdefault(day, []).append(name)
+
+        if not days_map:
+            return {"tips": None, "reason": "Itinerary not generated yet"}
+
+        prompt = _build_prompt(
+            city=trip["destination_city"],
+            profile=trip.get("traveler_profile", "cultural"),
+            days_map=days_map,
+        )
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -97,6 +97,7 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
                 },
                 timeout=30,
             )
+
         if resp.status_code != 200:
             return {"tips": None, "reason": f"Groq {resp.status_code}", "detail": resp.text[:300]}
 
