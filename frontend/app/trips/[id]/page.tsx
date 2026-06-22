@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import AttractionModal from '@/components/AttractionModal';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -406,11 +407,12 @@ export default function TripDetailPage() {
           </Link>
         </div>
         <div className="absolute top-4 right-6 flex gap-2 print:hidden">
-          <button onClick={shareTrip} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1 hover:bg-white/30 transition">
-            {copied ? '✅ Copiado!' : '🔗 Compartilhar'}
+          <button onClick={shareTrip} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-white/30 transition">
+            <Share2 size={14} />
+            {copied ? 'Copiado!' : 'Compartilhar'}
           </button>
-          <button onClick={deleteTrip} title="Excluir viagem" className="bg-red-500/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm hover:bg-red-600/80 transition">
-            🗑️
+          <button onClick={deleteTrip} title="Excluir viagem" className="bg-red-500/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-red-600/80 transition">
+            <Trash2 size={14} />
           </button>
         </div>
         <div className="absolute bottom-6 left-6 right-6">
@@ -498,7 +500,7 @@ export default function TripDetailPage() {
                   <span className="inline-block w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
                   Regenerando...
                 </>
-              ) : '🔄 Regenerar Roteiro'}
+              ) : <><RefreshCw size={14} /> Regenerar Roteiro</>}
             </button>
           </div>
         )}
@@ -514,7 +516,7 @@ export default function TripDetailPage() {
                   className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                   title="Exportar / Imprimir"
                 >
-                  🖨️ Exportar
+                  <Printer size={14} className="inline mr-1" /> Exportar
                 </button>
                 <button
                   onClick={() => setIsReordering(r => !r)}
@@ -524,7 +526,7 @@ export default function TripDetailPage() {
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {isReordering ? '✅ Concluir' : '⇅ Reorganizar'}
+                  {isReordering ? <><Check size={14} className="inline mr-1" />Concluir</> : <><ArrowUpDown size={14} className="inline mr-1" />Reorganizar</>}
                 </button>
               </div>
             </div>
@@ -672,8 +674,8 @@ export default function TripDetailPage() {
                                 <button
                                   onClick={() => deleteItem(item)}
                                   title="Remover"
-                                  className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600 transition text-sm flex-shrink-0"
-                                >×</button>
+                                  className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600 transition flex-shrink-0"
+                                ><X size={14} /></button>
                               </div>
                             ) : (
                               <div
@@ -727,7 +729,7 @@ export default function TripDetailPage() {
                                     <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                                       ⏱ {durationStr}
                                     </span>
-                                    <span className="print:hidden text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
+                                    <Info size={16} className="print:hidden text-gray-300 group-hover:text-brand-teal transition flex-shrink-0" />
                                   </div>
                                 </button>
                               </div>
@@ -744,7 +746,7 @@ export default function TripDetailPage() {
                       onClick={() => openAddModal(dayIndex + 1)}
                       className="w-full flex items-center justify-center gap-2 py-3 text-sm text-brand-teal font-medium hover:bg-teal-50 transition border-t border-dashed border-gray-200"
                     >
-                      <span className="text-lg">➕</span> Adicionar atração neste dia
+                      <Plus size={16} /> Adicionar atração neste dia
                     </button>
                   )}
 
