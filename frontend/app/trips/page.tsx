@@ -7,6 +7,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
+import { User, BookMarked, LogOut, CheckCircle, Trash2 } from 'lucide-react';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
@@ -125,18 +126,22 @@ export default function TripsPage() {
           </h1>
           <div className="flex items-center gap-4">
             {userId && (
-              <Link href={`/passport/${userId}`} className="text-gray-500 hover:text-brand-teal transition text-sm" title="Meu passaporte">
-                🛂 Passaporte
+              <Link href={`/passport/${userId}`} className="flex items-center gap-1.5 text-gray-500 hover:text-brand-teal transition" title="Meu passaporte">
+                <BookMarked size={18} />
+                <span className="hidden sm:inline text-sm">Passaporte</span>
               </Link>
             )}
-            <Link href="/profile" className="text-gray-500 hover:text-brand-teal transition" title="Meu perfil">
-              👤 Perfil
+            <Link href="/profile" className="flex items-center gap-1.5 text-gray-500 hover:text-brand-teal transition" title="Meu perfil">
+              <User size={18} />
+              <span className="hidden sm:inline text-sm">Perfil</span>
             </Link>
             <button
               onClick={handleLogout}
-              className="text-gray-600 hover:text-red-600 font-medium"
+              className="flex items-center gap-1.5 text-gray-500 hover:text-red-500 transition"
+              title="Sair"
             >
-              Sair
+              <LogOut size={18} />
+              <span className="hidden sm:inline text-sm">Sair</span>
             </button>
           </div>
         </div>
@@ -197,7 +202,7 @@ export default function TripsPage() {
                   </p>
                   {trip.status === 'completed' && (
                     <p className="text-xs font-semibold text-green-600 flex items-center gap-1 mb-3">
-                      <span>✅</span> Viagem concluída
+                      <CheckCircle size={14} /> Viagem concluída
                     </p>
                   )}
                   <div className="flex gap-2 flex-wrap">
@@ -210,16 +215,17 @@ export default function TripsPage() {
                     {trip.status !== 'completed' && (
                       <button
                         onClick={() => handleCompleteTrip(trip.id)}
-                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-medium text-sm"
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-medium text-sm"
                       >
-                        ✅ Concluída
+                        <CheckCircle size={15} /> Concluída
                       </button>
                     )}
                     <button
                       onClick={() => handleDeleteTrip(trip.id)}
-                      className="bg-red-100 text-red-600 px-3 py-2 rounded hover:bg-red-200 font-medium text-sm"
+                      className="flex items-center justify-center bg-red-100 text-red-600 px-3 py-2 rounded hover:bg-red-200"
+                      title="Excluir viagem"
                     >
-                      🗑
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
 import axios from 'axios';
+import { ArrowLeft, BookMarked, Plus, X } from 'lucide-react';
 
 const TRAVELER_PROFILES = [
   { value: 'adventure', label: '🏔️ Aventura', description: 'Trilhas, natureza, ar livre' },
@@ -95,8 +96,9 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white">
       <nav className="bg-white shadow-md border-b-4 border-brand-teal print:hidden">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/trips" className="text-gray-400 hover:text-brand-teal transition">
-            ← Voltar
+          <Link href="/trips" className="flex items-center gap-1.5 text-gray-400 hover:text-brand-teal transition">
+            <ArrowLeft size={18} />
+            <span className="text-sm">Voltar</span>
           </Link>
           <h1 className="text-xl font-bold text-brand-teal flex items-center gap-2">
             <img src="/icons/icon.svg" alt="" className="w-7 h-7 rounded-lg" />
@@ -187,8 +189,8 @@ export default function ProfilePage() {
                 </a>
               )}
               <button onClick={() => setAddCountryModal(true)}
-                className="text-xs bg-gray-100 text-gray-700 font-semibold px-3 py-1.5 rounded-full hover:bg-gray-200 transition">
-                + Adicionar país
+                className="flex items-center gap-1 text-xs bg-gray-100 text-gray-700 font-semibold px-3 py-1.5 rounded-full hover:bg-gray-200 transition">
+                <Plus size={13} /> Adicionar país
               </button>
             </div>
           </div>
@@ -201,7 +203,9 @@ export default function ProfilePage() {
                   <span className="text-xs font-medium text-teal-900">{c.country || c.country_code.toUpperCase()}</span>
                   {c.year && <span className="text-xs text-teal-500">{c.year}</span>}
                   {c.source === 'manual' && (
-                    <button onClick={() => handleRemoveCountry(c.country_code)} className="text-red-400 hover:text-red-600 text-xs ml-0.5">×</button>
+                    <button onClick={() => handleRemoveCountry(c.country_code)} className="text-red-400 hover:text-red-600 ml-0.5" title="Remover">
+                      <X size={12} />
+                    </button>
                   )}
                 </div>
               ))}

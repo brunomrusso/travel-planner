@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { ArrowLeft, Plus, Share2 } from 'lucide-react';
 
 const WorldMap = dynamic(() => import('@/components/WorldMap'), { ssr: false });
 
@@ -72,30 +73,37 @@ export default function PassportPage() {
   );
 
   const title = getTravelerTitle(data.stats.countries);
-  const visitedCodes = data.countries.map(c => c.country_code);
+  const sortedCountries = [...data.countries].sort((a, b) => {
+    if (!a.year && !b.year) return 0;
+    if (!a.year) return 1;
+    if (!b.year) return -1;
+    return a.year - b.year;
+  });
+  const visitedCodes = sortedCountries.map(c => c.country_code);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-white">
       {/* Navbar */}
       <nav className="bg-white shadow-md border-b-4 border-brand-teal">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/trips" className="flex items-center gap-2 text-brand-teal font-semibold hover:text-teal-700 transition">
+          <Link href="/trips" className="flex items-center gap-1.5 text-brand-teal font-semibold hover:text-teal-700 transition">
             <img src="/icons/icon.svg" alt="" className="w-7 h-7 rounded-lg" />
-            <span className="hidden sm:inline">← Minhas Viagens</span>
-            <span className="sm:hidden">←</span>
+            <ArrowLeft size={16} />
+            <span className="hidden sm:inline text-sm">Minhas Viagens</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link
               href="/profile"
-              className="text-sm bg-teal-50 text-brand-teal font-semibold px-4 py-1.5 rounded-full hover:bg-teal-100 transition"
+              className="flex items-center gap-1.5 text-sm bg-teal-50 text-brand-teal font-semibold px-4 py-1.5 rounded-full hover:bg-teal-100 transition"
             >
-              + Adicionar país
+              <Plus size={14} /> Adicionar país
             </Link>
             <button
               onClick={share}
-              className="text-sm bg-brand-teal text-white font-semibold px-4 py-1.5 rounded-full hover:bg-teal-700 transition"
+              className="flex items-center gap-1.5 text-sm bg-brand-teal text-white font-semibold px-4 py-1.5 rounded-full hover:bg-teal-700 transition"
             >
-              {copied ? '✅ Copiado!' : '🔗 Compartilhar'}
+              <Share2 size={14} />
+              <span>{copied ? 'Copiado!' : 'Compartilhar'}</span>
             </button>
           </div>
         </div>
@@ -138,21 +146,21 @@ export default function PassportPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Carimbos</p>
-            <Link href="/profile" className="text-xs text-brand-teal hover:underline font-medium">
-              + Adicionar país visitado
+            <Link href="/profile" className="flex items-center gap-1 text-xs text-brand-teal hover:underline font-medium">
+              <Plus size={12} /> Adicionar país visitado
             </Link>
           </div>
-          {data.countries.length === 0 ? (
+          {sortedCountries.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-5xl mb-3">🌍</p>
               <p className="text-gray-500 mb-4">Nenhuma viagem registrada ainda.</p>
-              <Link href="/profile" className="inline-block bg-brand-teal text-white font-semibold px-5 py-2 rounded-full text-sm hover:bg-teal-700 transition">
-                + Adicionar país visitado
+              <Link href="/profile" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-semibold px-5 py-2 rounded-full text-sm hover:bg-teal-700 transition">
+                <Plus size={14} /> Adicionar país visitado
               </Link>
             </div>
           ) : (
             <div className="flex flex-wrap gap-5 justify-center py-2">
-              {data.countries.map((c, i) => (
+              {sortedCountries.map((c, i) => (
                 <div
                   key={c.country_code + i}
                   style={{ transform: `rotate(${ROTATIONS[i % ROTATIONS.length]}deg)` }}
