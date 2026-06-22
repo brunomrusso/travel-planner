@@ -92,6 +92,7 @@ export default function TripDetailPage() {
   const [generateError, setGenerateError] = useState('');
   const [selectedAttraction, setSelectedAttraction] = useState<{
     name: string; city: string; category: string; durationStr: string; address?: string;
+    lat?: number; lon?: number;
   } | null>(null);
   const [tips, setTips] = useState<{
     overview?: string;
@@ -99,6 +100,13 @@ export default function TripDetailPage() {
   } | null>(null);
   const [tipsLoading, setTipsLoading] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const [visited, setVisited] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const saved = localStorage.getItem(`visited_${typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : ''}`);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -191,6 +199,15 @@ export default function TripDetailPage() {
       { id: item.id, day_number: item.day_number, order_in_day: swap.order_in_day },
       { id: swap.id, day_number: swap.day_number, order_in_day: item.order_in_day },
     ]);
+  };
+
+  const toggleVisited = (attractionId: string) => {
+    setVisited(prev => {
+      const next = new Set(prev);
+      next.has(attractionId) ? next.delete(attractionId) : next.add(attractionId);
+      try { localStorage.setItem(`visited_${tripId}`, JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
   };
 
   const moveToDay = (item: ItineraryItem, newDay: number) => {
@@ -366,19 +383,31 @@ export default function TripDetailPage() {
         {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
               <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
-              <button
-                onClick={() => setIsReordering(r => !r)}
-                className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
-                  isReordering
-                    ? 'bg-brand-teal text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {isReordering ? '✅ Concluir' : '⇅ Reorganizar'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Exportar / Imprimir"
+                >
+                  🖨️ Exportar
+                </button>
+                <button
+                  onClick={() => setIsReordering(r => !r)}
+                  className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
+                    isReordering
+                      ? 'bg-brand-teal text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {isReordering ? '✅ Concluir' : '⇅ Reorganizar'}
+                </button>
+              </div>
             </div>
+            {visited.size > 0 && !isReordering && (
+              <p className="text-sm text-green-600 print:hidden">✅ {visited.size} {visited.size === 1 ? 'atração visitada' : 'atrações visitadas'}</p>
+            )}
             {tipsLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-400 animate-pulse">
                 <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-brand-teal rounded-full animate-spin" />
@@ -518,37 +547,61 @@ export default function TripDetailPage() {
                                 </select>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                className="w-full flex items-center gap-4 p-5 hover:bg-teal-50/60 active:bg-teal-50 transition border-b border-gray-100 last:border-0 text-left group"
-                                onClick={() => attraction && setSelectedAttraction({
-                                  name: attraction.name,
-                                  city: attraction.city || trip.destination_city,
-                                  category: categoryPt,
-                                  durationStr,
-                                  address: attraction.address,
-                                })}
+                              <div
+                                className={`w-full flex items-center gap-4 p-5 border-b border-gray-100 last:border-0 transition ${
+                                  visited.has(item.attraction_id)
+                                    ? 'bg-green-50/60'
+                                    : 'hover:bg-teal-50/60'
+                                }`}
                               >
-                                <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVisited(item.attraction_id)}
+                                  title={visited.has(item.attraction_id) ? 'Desmarcar' : 'Marcar como visitado'}
+                                  className={`print:hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition ${
+                                    visited.has(item.attraction_id)
+                                      ? 'bg-green-100 text-green-600'
+                                      : 'bg-brand-teal-light text-brand-teal hover:bg-green-100 hover:text-green-600'
+                                  }`}
+                                >
+                                  {visited.has(item.attraction_id) ? '✓' : index + 1}
+                                </button>
+                                <div className="print:hidden flex-shrink-0 w-10 h-10 rounded-full bg-brand-teal-light hidden print:flex items-center justify-center font-bold text-brand-teal text-lg">
                                   {index + 1}
                                 </div>
-                                <div className="text-2xl flex-shrink-0">{icon}</div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-gray-900 truncate group-hover:text-brand-teal transition">{attraction?.name || 'Atração'}</h4>
-                                  <p className="text-sm text-gray-500 flex items-center gap-2">
-                                    {item.start_time && (
-                                      <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
-                                    )}
-                                    <span>{categoryPt}</span>
-                                  </p>
-                                </div>
-                                <div className="flex-shrink-0 flex items-center gap-2">
-                                  <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                                    ⏱ {durationStr}
-                                  </span>
-                                  <span className="text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
-                                </div>
-                              </button>
+                                <button
+                                  type="button"
+                                  className="flex-1 flex items-center gap-4 text-left group min-w-0"
+                                  onClick={() => attraction && setSelectedAttraction({
+                                    name: attraction.name,
+                                    city: attraction.city || trip.destination_city,
+                                    category: categoryPt,
+                                    durationStr,
+                                    address: attraction.address,
+                                    lat: attraction.latitude,
+                                    lon: attraction.longitude,
+                                  })}
+                                >
+                                  <div className="text-2xl flex-shrink-0">{icon}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className={`font-bold truncate group-hover:text-brand-teal transition ${
+                                      visited.has(item.attraction_id) ? 'line-through text-gray-400' : 'text-gray-900'
+                                    }`}>{attraction?.name || 'Atração'}</h4>
+                                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                                      {item.start_time && (
+                                        <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
+                                      )}
+                                      <span>{categoryPt}</span>
+                                    </p>
+                                  </div>
+                                  <div className="flex-shrink-0 flex items-center gap-2">
+                                    <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                                      ⏱ {durationStr}
+                                    </span>
+                                    <span className="print:hidden text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
+                                  </div>
+                                </button>
+                              </div>
                             )}
                             {!isReordering && travelConnector}
                           </div>
@@ -576,6 +629,8 @@ export default function TripDetailPage() {
           category={selectedAttraction.category}
           durationStr={selectedAttraction.durationStr}
           address={selectedAttraction.address}
+          lat={selectedAttraction.lat}
+          lon={selectedAttraction.lon}
           onClose={() => setSelectedAttraction(null)}
         />
       )}

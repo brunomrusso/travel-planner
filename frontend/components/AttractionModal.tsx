@@ -49,25 +49,51 @@ async function fetchWikiInfo(name: string, city: string): Promise<WikiInfo | nul
   );
 }
 
+async function fetchOpeningHours(lat?: number, lon?: number): Promise<string | null> {
+  if (!lat || !lon) return null;
+  try {
+    const query = `[out:json];node(around:80,${lat},${lon})["opening_hours"];out body 1;`;
+    const res = await fetch(
+      `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.elements?.[0]?.tags?.opening_hours ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatOpeningHours(raw: string): string {
+  return raw
+    .replace(/Mo/g, 'Seg').replace(/Tu/g, 'Ter').replace(/We/g, 'Qua')
+    .replace(/Th/g, 'Qui').replace(/Fr/g, 'Sex').replace(/Sa/g, 'Sáb').replace(/Su/g, 'Dom')
+    .replace(/PH/g, 'Feriado').replace(/off/g, 'fechado');
+}
+
 interface AttractionModalProps {
   name: string;
   city: string;
   category: string;
   durationStr: string;
   address?: string;
+  lat?: number;
+  lon?: number;
   onClose: () => void;
 }
 
-export default function AttractionModal({ name, city, category, durationStr, address, onClose }: AttractionModalProps) {
+export default function AttractionModal({ name, city, category, durationStr, address, lat, lon, onClose }: AttractionModalProps) {
   const [info, setInfo] = useState<WikiInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openingHours, setOpeningHours] = useState<string | null>(null);
 
   useEffect(() => {
     fetchWikiInfo(name, city).then(result => {
       setInfo(result);
       setLoading(false);
     });
-  }, [name, city]);
+    fetchOpeningHours(lat, lon).then(setOpeningHours);
+  }, [name, city, lat, lon]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -113,6 +139,9 @@ export default function AttractionModal({ name, city, category, durationStr, add
               <h2 className="text-xl font-bold text-gray-900 leading-tight">{name}</h2>
               <p className="text-sm text-gray-500 mt-0.5">{category} • ⏱ {durationStr}</p>
               {address && <p className="text-xs text-gray-400 mt-0.5">📍 {address}</p>}
+              {openingHours && (
+                <p className="text-xs text-green-700 mt-1 font-medium">🕒 {formatOpeningHours(openingHours)}</p>
+              )}
             </div>
             <button
               onClick={onClose}

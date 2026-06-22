@@ -48,6 +48,20 @@ export default function NewTripPage() {
   const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
+    const loadPrefs = async () => {
+      const { data } = await getSession();
+      if (!data?.session) return;
+      try {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/users/me/preferences`, {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        });
+        if (res.data?.default_profile) setProfiles([res.data.default_profile]);
+      } catch {}
+    };
+    loadPrefs();
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       setDestinations(prev => prev.map((d, i) => {
         if (dropdownRefs.current[i] && !dropdownRefs.current[i]!.contains(e.target as Node)) {
