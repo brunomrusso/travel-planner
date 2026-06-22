@@ -13,13 +13,19 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['travel', 'lifestyle'],
     icons: [
       {
-        src: '/icons/icon-192.png',
-        sizes: '192x192',
+        src: '/apple-icon',
+        sizes: '180x180',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/icons/icon-512.png',
+        src: '/icon',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icon',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

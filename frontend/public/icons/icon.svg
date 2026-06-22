@@ -1,24 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.18)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+
   <!-- Background -->
-  <rect width="512" height="512" rx="96" fill="#0d9488"/>
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  <!-- Subtle top sheen -->
+  <rect width="512" height="256" rx="100" fill="url(#glow)"/>
 
-  <!-- Globe outline -->
-  <circle cx="256" cy="230" r="140" fill="none" stroke="white" stroke-width="18" opacity="0.9"/>
+  <!-- Airplane (top-down view, white) -->
+  <!-- Fuselage -->
+  <path d="M256 72 C272 72 282 88 282 112 L282 348 C282 368 272 382 256 382 C240 382 230 368 230 348 L230 112 C230 88 240 72 256 72 Z" fill="white"/>
+  <!-- Left wing (swept back) -->
+  <path d="M230 188 L76 274 L76 302 L230 236 Z" fill="white"/>
+  <!-- Right wing -->
+  <path d="M282 188 L436 274 L436 302 L282 236 Z" fill="white"/>
+  <!-- Left tail fin -->
+  <path d="M230 308 L152 352 L152 370 L230 338 Z" fill="white"/>
+  <!-- Right tail fin -->
+  <path d="M282 308 L360 352 L360 370 L282 338 Z" fill="white"/>
+  <!-- Cockpit window -->
+  <ellipse cx="256" cy="104" rx="14" ry="20" fill="rgba(20,184,166,0.7)"/>
 
-  <!-- Latitude lines -->
-  <ellipse cx="256" cy="230" rx="140" ry="55" fill="none" stroke="white" stroke-width="10" opacity="0.5"/>
-  <line x1="116" y1="230" x2="396" y2="230" stroke="white" stroke-width="10" opacity="0.5"/>
-
-  <!-- Longitude arc -->
-  <ellipse cx="256" cy="230" rx="55" ry="140" fill="none" stroke="white" stroke-width="10" opacity="0.5"/>
-
-  <!-- Location pin -->
-  <circle cx="256" cy="195" r="28" fill="#ea580c"/>
-  <path d="M256 223 Q230 260 256 295 Q282 260 256 223Z" fill="#ea580c"/>
-
-  <!-- App name -->
-  <text x="256" y="418" font-family="Arial, sans-serif" font-size="52" font-weight="700"
-        text-anchor="middle" fill="white" letter-spacing="1">ROTEIRO</text>
-  <text x="256" y="468" font-family="Arial, sans-serif" font-size="38" font-weight="400"
-        text-anchor="middle" fill="#99f6e4" letter-spacing="3">CERTO</text>
+  <!-- Orange location pin at bottom -->
+  <circle cx="256" cy="424" r="26" fill="#ea580c"/>
+  <path d="M256 450 Q232 472 256 494 Q280 472 256 450 Z" fill="#ea580c"/>
 </svg>
