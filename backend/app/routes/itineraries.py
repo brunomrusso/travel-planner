@@ -1,9 +1,16 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from uuid import UUID
+from pydantic import BaseModel
 from app.models.itinerary import ItineraryItem, ItineraryItemCreate, ItineraryItemUpdate
 from app.database import get_supabase
 from app.auth import get_user_id_from_token
+
+
+class ReorderItem(BaseModel):
+    id: str
+    day_number: int
+    order_in_day: int
 
 router = APIRouter(prefix="/itineraries", tags=["itineraries"])
 
@@ -57,5 +64,25 @@ async def update_itinerary(trip_id: UUID, items: List[ItineraryItemUpdate], user
             supabase.table("itineraries").insert(update_data).execute()
         
         return {"message": "Itinerary updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.patch("/{trip_id}/reorder")
+async def reorder_itinerary(trip_id: UUID, updates: List[ReorderItem], user_id: str = Depends(get_user_id_from_token)):
+    supabase = get_supabase()
+    try:
+        trip_response = supabase.table("trips").select("id").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+
+        for upd in updates:
+            supabase.table("itineraries").update({
+                "day_number": upd.day_number,
+                "order_in_day": upd.order_in_day,
+            }).eq("id", upd.id).eq("trip_id", str(trip_id)).execute()
+
+        return {"message": "Reordered successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

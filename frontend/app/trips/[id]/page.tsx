@@ -98,6 +98,7 @@ export default function TripDetailPage() {
     days?: Array<{ day: number; theme: string; tip: string; food: string }>;
   } | null>(null);
   const [tipsLoading, setTipsLoading] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
   const [token, setToken] = useState('');
 
   useEffect(() => {
@@ -158,6 +159,51 @@ export default function TripDetailPage() {
       .catch(err => console.error('[tips error]', err?.response?.data || err?.message))
       .finally(() => setTipsLoading(false));
   }, [itinerary.length, token, tripId]);
+
+  const numDays = trip
+    ? Math.ceil((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000) + 1
+    : 0;
+
+  const persistReorder = async (updates: { id: string; day_number: number; order_in_day: number }[]) => {
+    try {
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}/reorder`,
+        updates,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (e) {
+      console.error('reorder error', e);
+    }
+  };
+
+  const moveWithinDay = (item: ItineraryItem, dir: 'up' | 'down', dayItems: ItineraryItem[]) => {
+    const idx = dayItems.findIndex(i => i.id === item.id);
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= dayItems.length) return;
+    const swap = dayItems[swapIdx];
+    const newItinerary = itinerary.map(i => {
+      if (i.id === item.id) return { ...i, order_in_day: swap.order_in_day };
+      if (i.id === swap.id) return { ...i, order_in_day: item.order_in_day };
+      return i;
+    });
+    setItinerary(newItinerary);
+    persistReorder([
+      { id: item.id, day_number: item.day_number, order_in_day: swap.order_in_day },
+      { id: swap.id, day_number: swap.day_number, order_in_day: item.order_in_day },
+    ]);
+  };
+
+  const moveToDay = (item: ItineraryItem, newDay: number) => {
+    if (newDay === item.day_number) return;
+    const targetMax = itinerary
+      .filter(i => i.day_number === newDay)
+      .reduce((m, i) => Math.max(m, i.order_in_day), 0);
+    const newOrder = targetMax + 1;
+    setItinerary(itinerary.map(i =>
+      i.id === item.id ? { ...i, day_number: newDay, order_in_day: newOrder } : i
+    ));
+    persistReorder([{ id: item.id, day_number: newDay, order_in_day: newOrder }]);
+  };
 
   const handleGenerateItinerary = async () => {
     setIsGenerating(true);
@@ -320,7 +366,19 @@ export default function TripDetailPage() {
         {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+              <button
+                onClick={() => setIsReordering(r => !r)}
+                className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
+                  isReordering
+                    ? 'bg-brand-teal text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {isReordering ? '✅ Concluir' : '⇅ Reorganizar'}
+              </button>
+            </div>
             {tipsLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-400 animate-pulse">
                 <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-brand-teal rounded-full animate-spin" />
@@ -427,38 +485,72 @@ export default function TripDetailPage() {
 
                         return (
                           <div key={item.id}>
-                            <button
-                              type="button"
-                              className="w-full flex items-center gap-4 p-5 hover:bg-teal-50/60 active:bg-teal-50 transition border-b border-gray-100 last:border-0 text-left group"
-                              onClick={() => attraction && setSelectedAttraction({
-                                name: attraction.name,
-                                city: attraction.city || trip.destination_city,
-                                category: categoryPt,
-                                durationStr,
-                                address: attraction.address,
-                              })}
-                            >
-                              <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
-                                {index + 1}
+                            {isReordering ? (
+                              <div className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 bg-amber-50/40">
+                                <div className="flex flex-col gap-0.5">
+                                  <button
+                                    onClick={() => moveWithinDay(item, 'up', dayItems)}
+                                    disabled={index === 0}
+                                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-25 disabled:cursor-not-allowed transition text-sm"
+                                  >↑</button>
+                                  <button
+                                    onClick={() => moveWithinDay(item, 'down', dayItems)}
+                                    disabled={index === dayItems.length - 1}
+                                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-25 disabled:cursor-not-allowed transition text-sm"
+                                  >↓</button>
+                                </div>
+                                <div className="flex-shrink-0 w-8 h-8 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-sm">
+                                  {index + 1}
+                                </div>
+                                <div className="text-xl flex-shrink-0">{icon}</div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-gray-900 truncate text-sm">{attraction?.name || 'Atração'}</p>
+                                  <p className="text-xs text-gray-400">{categoryPt} • ⏱ {durationStr}</p>
+                                </div>
+                                <select
+                                  value={item.day_number}
+                                  onChange={e => moveToDay(item, parseInt(e.target.value))}
+                                  className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700 flex-shrink-0"
+                                >
+                                  {Array.from({ length: numDays }, (_, i) => i + 1).map(d => (
+                                    <option key={d} value={d}>Dia {d}</option>
+                                  ))}
+                                </select>
                               </div>
-                              <div className="text-2xl flex-shrink-0">{icon}</div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-gray-900 truncate group-hover:text-brand-teal transition">{attraction?.name || 'Atração'}</h4>
-                                <p className="text-sm text-gray-500 flex items-center gap-2">
-                                  {item.start_time && (
-                                    <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
-                                  )}
-                                  <span>{categoryPt}</span>
-                                </p>
-                              </div>
-                              <div className="flex-shrink-0 flex items-center gap-2">
-                                <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                                  ⏱ {durationStr}
-                                </span>
-                                <span className="text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
-                              </div>
-                            </button>
-                            {travelConnector}
+                            ) : (
+                              <button
+                                type="button"
+                                className="w-full flex items-center gap-4 p-5 hover:bg-teal-50/60 active:bg-teal-50 transition border-b border-gray-100 last:border-0 text-left group"
+                                onClick={() => attraction && setSelectedAttraction({
+                                  name: attraction.name,
+                                  city: attraction.city || trip.destination_city,
+                                  category: categoryPt,
+                                  durationStr,
+                                  address: attraction.address,
+                                })}
+                              >
+                                <div className="flex-shrink-0 w-10 h-10 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-lg">
+                                  {index + 1}
+                                </div>
+                                <div className="text-2xl flex-shrink-0">{icon}</div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold text-gray-900 truncate group-hover:text-brand-teal transition">{attraction?.name || 'Atração'}</h4>
+                                  <p className="text-sm text-gray-500 flex items-center gap-2">
+                                    {item.start_time && (
+                                      <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
+                                    )}
+                                    <span>{categoryPt}</span>
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0 flex items-center gap-2">
+                                  <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                                    ⏱ {durationStr}
+                                  </span>
+                                  <span className="text-gray-300 group-hover:text-brand-teal transition text-lg">ℹ️</span>
+                                </div>
+                              </button>
+                            )}
+                            {!isReordering && travelConnector}
                           </div>
                         );
                       })
