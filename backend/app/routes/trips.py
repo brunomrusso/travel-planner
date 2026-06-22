@@ -112,6 +112,21 @@ async def _ensure_attractions_for_city(city: str, supabase) -> int:
     print(f"Saved {saved} attractions for '{city}'")
     return saved
 
+@router.patch("/{trip_id}/complete")
+async def complete_trip(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
+    supabase = get_supabase()
+    try:
+        trip_resp = supabase.table("trips").select("id").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        supabase.table("trips").update({"status": "completed"}).eq("id", str(trip_id)).execute()
+        return {"message": "Trip marked as completed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get("/{trip_id}/share")
 async def get_shared_trip(trip_id: UUID):
     supabase = get_supabase()

@@ -26,6 +26,7 @@ interface Trip {
   end_date: string;
   traveler_profile: string;
   created_at: string;
+  status?: string;
 }
 
 
@@ -34,6 +35,7 @@ export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState('');
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
     const loadTrips = async () => {
@@ -45,6 +47,7 @@ export default function TripsPage() {
       }
 
       setToken(data.session.access_token);
+      setUserId(data.session.user.id);
 
       try {
         const response = await axios.get(
@@ -69,6 +72,18 @@ export default function TripsPage() {
   const handleLogout = async () => {
     await signOut();
     router.push('/');
+  };
+
+  const handleCompleteTrip = async (tripId: string) => {
+    if (!confirm('Marcar esta viagem como concluída?')) return;
+    try {
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/complete`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: 'completed' } : t));
+    } catch { alert('Erro ao atualizar viagem.'); }
   };
 
   const handleDeleteTrip = async (tripId: string) => {
@@ -109,6 +124,11 @@ export default function TripsPage() {
             Roteiria
           </h1>
           <div className="flex items-center gap-4">
+            {userId && (
+              <Link href={`/passport/${userId}`} className="text-gray-500 hover:text-brand-teal transition text-sm" title="Meu passaporte">
+                🛂 Passaporte
+              </Link>
+            )}
             <Link href="/profile" className="text-gray-500 hover:text-brand-teal transition" title="Meu perfil">
               👤 Perfil
             </Link>
@@ -175,18 +195,31 @@ export default function TripsPage() {
                   <p className="text-gray-600 text-sm mb-4">
                     {formatProfiles(trip.traveler_profile)}
                   </p>
-                  <div className="flex gap-2">
+                  {trip.status === 'completed' && (
+                    <p className="text-xs font-semibold text-green-600 flex items-center gap-1 mb-3">
+                      <span>✅</span> Viagem concluída
+                    </p>
+                  )}
+                  <div className="flex gap-2 flex-wrap">
                     <Link
                       href={`/trips/${trip.id}`}
-                      className="flex-1 bg-brand-teal text-white px-4 py-2 rounded text-center hover:bg-brand-teal-dark font-medium"
+                      className="flex-1 bg-brand-teal text-white px-4 py-2 rounded text-center hover:bg-brand-teal-dark font-medium text-sm"
                     >
                       Ver Roteiro
                     </Link>
+                    {trip.status !== 'completed' && (
+                      <button
+                        onClick={() => handleCompleteTrip(trip.id)}
+                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-medium text-sm"
+                      >
+                        ✅ Concluída
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDeleteTrip(trip.id)}
-                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 font-medium"
+                      className="bg-red-100 text-red-600 px-3 py-2 rounded hover:bg-red-200 font-medium text-sm"
                     >
-                      Excluir
+                      🗑
                     </button>
                   </div>
                 </div>
