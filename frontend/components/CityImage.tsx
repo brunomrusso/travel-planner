@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 
 const imageCache = new Map<string, string | null>();
 
+function isPhotoUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.svg')) return false;
+  if (/flag|coat.?of.?arms|bras.?o|bandeira|emblem|shield|wappen/i.test(lower)) return false;
+  return true;
+}
+
 async function fetchCityImage(city: string): Promise<string | null> {
   const tryLang = async (lang: string): Promise<string | null> => {
     try {
@@ -12,12 +20,17 @@ async function fetchCityImage(city: string): Promise<string | null> {
       );
       if (!res.ok) return null;
       const data = await res.json();
-      return data?.originalimage?.source || data?.thumbnail?.source || null;
+      const original = data?.originalimage?.source;
+      const thumb = data?.thumbnail?.source;
+      if (isPhotoUrl(original)) return original;
+      if (isPhotoUrl(thumb)) return thumb;
+      return null;
     } catch {
       return null;
     }
   };
-  return (await tryLang('pt')) || (await tryLang('en'));
+  // English Wikipedia tends to have better city panoramas as lead image
+  return (await tryLang('en')) || (await tryLang('pt'));
 }
 
 interface CityImageProps {

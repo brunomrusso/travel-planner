@@ -43,7 +43,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-teal-light to-white flex items-center justify-center px-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Criar Conta</h1>
-        <p className="text-gray-600 text-center mb-8">Crie sua conta no Roteiro Certo</p>
+        <p className="text-gray-600 text-center mb-8">Crie sua conta no Roteiria</p>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">

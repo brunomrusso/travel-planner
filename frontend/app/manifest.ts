@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Roteiro Certo',
-    short_name: 'Roteiro',
+    name: 'Roteiria',
+    short_name: 'Roteiria',
     description: 'Planeje sua viagem perfeita com roteiros personalizados',
     start_url: '/',
     display: 'standalone',

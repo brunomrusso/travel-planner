@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Roteiro Certo",
+  title: "Roteiria",
   description: "Planeje sua viagem perfeita com roteiros personalizados",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Roteiro Certo",
+    title: "Roteiria",
   },
   icons: {
     icon: "/icons/icon.svg",
@@ -41,7 +41,7 @@ export default function RootLayout({
         {/* iOS PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Roteiro Certo" />
+        <meta name="apple-mobile-web-app-title" content="Roteiria" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192.png" />
