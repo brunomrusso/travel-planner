@@ -32,6 +32,109 @@ const SEASONAL_DATA: Array<{ keys: string[]; months: number[]; warn: boolean; ms
   { keys: ['machu picchu'], months: [6, 7, 8], warn: false, msg: 'Temporada seca: melhor clima mas ingressos esgotam semanas antes.' },
 ];
 
+interface DayTrip { city: string; distance_km: number; how: string; highlights: string[]; tip?: string; }
+
+const DAY_TRIPS: Record<string, DayTrip[]> = {
+  paris: [
+    { city: 'Versailles', distance_km: 23, how: 'Trem RER C (35 min)', highlights: ['Palácio de Versailles', 'Jardins reais', 'Galeria dos Espelhos'], tip: 'Compre ingresso online — fila enorme!' },
+    { city: 'Giverny', distance_km: 80, how: 'Ônibus ou carro (1h20)', highlights: ['Casa de Monet', 'Jardim das Nenúfares'], tip: 'Aberto abr–out; fechado no inverno.' },
+    { city: 'Chartres', distance_km: 90, how: 'Trem (1h)', highlights: ['Catedral Gótica de Chartres', 'Cidade medieval'], tip: 'Meio dia basta.' },
+    { city: 'Reims', distance_km: 145, how: 'TGV (45 min)', highlights: ['Catedral Notre-Dame de Reims', 'Caves de champagne'], tip: 'Agende visita a uma maison de champagne.' },
+    { city: 'Fontainebleau', distance_km: 60, how: 'Trem (40 min)', highlights: ['Castelo de Fontainebleau', 'Floresta para trilhas'] },
+  ],
+  rome: [
+    { city: 'Tivoli', distance_km: 30, how: 'Ônibus ou carro (45 min)', highlights: ["Villa d'Este", 'Villa Adriana (UNESCO)'] },
+    { city: 'Orvieto', distance_km: 90, how: 'Trem (1h10)', highlights: ['Catedral de Orvieto', 'Cidade medieval na rocha', 'Vinhos locais'] },
+    { city: 'Nápoles', distance_km: 230, how: 'Trem alta velocidade (1h10)', highlights: ['Pompeia', 'Herculano', 'Pizza autêntica'], tip: 'Sair cedo — dá para ver Pompeia e voltar no mesmo dia.' },
+    { city: 'Ostia Antica', distance_km: 25, how: 'Trem (30 min)', highlights: ['Ruínas de cidade portuária romana', 'Mosaicos originais'], tip: 'Menos turistas que Pompeia.' },
+  ],
+  barcelona: [
+    { city: 'Montserrat', distance_km: 60, how: 'Trem + cremalheira (1h15)', highlights: ['Mosteiro de Montserrat', 'Trilha Sant Joan', 'Vista dos Pireneus'] },
+    { city: 'Girona', distance_km: 100, how: 'Trem (38 min)', highlights: ['Casco antigo medieval', 'Muralhas romanas', 'Cenário de Game of Thrones'] },
+    { city: 'Sitges', distance_km: 35, how: 'Trem (35 min)', highlights: ['Praias', 'Museu Cau Ferrat', 'Arquitetura modernista'] },
+    { city: 'Figueres', distance_km: 145, how: 'Trem (55 min)', highlights: ['Museu Teatro Dalí'] },
+    { city: 'Tarragona', distance_km: 100, how: 'Trem (1h)', highlights: ['Anfiteatro romano', 'Muralhas romanas UNESCO', 'Praias'] },
+  ],
+  london: [
+    { city: 'Bath', distance_km: 170, how: 'Trem (1h25)', highlights: ['Termas Romanas', 'Abadia de Bath', 'Arquitetura georgiana'], tip: 'Favorito de Jane Austen.' },
+    { city: 'Oxford', distance_km: 95, how: 'Ônibus ou trem (1h)', highlights: ['Universidade de Oxford', 'Bodleian Library', 'Christ Church'] },
+    { city: 'Cambridge', distance_km: 90, how: 'Trem (50 min)', highlights: ["Universidade de Cambridge", 'Punting no rio Cam', "King's College Chapel"] },
+    { city: 'Windsor', distance_km: 35, how: 'Trem (35 min)', highlights: ['Castelo de Windsor', 'Eton College'], tip: 'Confirme horários da troca da guarda.' },
+    { city: 'Stonehenge', distance_km: 140, how: 'Tour ou carro (1h30)', highlights: ['Stonehenge', 'Avebury', 'Planuras de Salisbury'] },
+  ],
+  amsterdam: [
+    { city: 'Haarlem', distance_km: 20, how: 'Trem (15 min)', highlights: ['Grote Kerk', 'Frans Hals Museum', 'Centro histórico'] },
+    { city: 'Delft', distance_km: 65, how: 'Trem (1h)', highlights: ['Cerâmica Delft Blue', 'Centro medieval', 'Túmulo de Vermeer'] },
+    { city: 'Keukenhof', distance_km: 35, how: 'Trem + ônibus (1h10)', highlights: ['7 milhões de tulipas', 'Jardins botânicos'], tip: 'Apenas março–maio.' },
+    { city: 'Bruges', distance_km: 110, how: 'Trem (2h via Bruxelas)', highlights: ['Canais medievais', 'Chocolate belga', 'Cerveja artesanal'], tip: 'Veneza do Norte!' },
+  ],
+  berlin: [
+    { city: 'Potsdam', distance_km: 30, how: 'Trem S-Bahn (40 min)', highlights: ['Palácio Sanssouci', 'Parques UNESCO', 'Palácio Cecilienhof'] },
+    { city: 'Dresden', distance_km: 200, how: 'Trem ICE (1h10)', highlights: ['Frauenkirche', 'Zwinger Palace', 'Cidade Velha reconstruída'] },
+    { city: 'Sachsenhausen', distance_km: 35, how: 'Trem (1h)', highlights: ['Memorial do campo de concentração'], tip: 'Visita importante historicamente.' },
+  ],
+  prague: [
+    { city: 'Cesky Krumlov', distance_km: 175, how: 'Ônibus (2h45)', highlights: ['Castelo barroco', 'Rio Vltava', 'Centro histórico UNESCO'] },
+    { city: 'Karlovy Vary', distance_km: 130, how: 'Ônibus (2h)', highlights: ['Spas termais', 'Colunas de termas', 'Festival de cinema'] },
+    { city: 'Kutna Hora', distance_km: 80, how: 'Trem (1h)', highlights: ['Ossário de Sedlec', 'Catedral de Santa Bárbara', 'Cidade prata medieval'] },
+  ],
+  lisbon: [
+    { city: 'Sintra', distance_km: 30, how: 'Trem (40 min)', highlights: ['Palácio da Pena', 'Castelo dos Mouros', 'Quinta da Regaleira'], tip: 'Vá cedo — superlota em jul/ago.' },
+    { city: 'Cascais', distance_km: 30, how: 'Trem (40 min)', highlights: ['Praias', 'Estoril Casino', 'Boca do Inferno'] },
+    { city: 'Obidos', distance_km: 90, how: 'Ônibus (1h30)', highlights: ['Castelo medieval', 'Muralhas para caminhar', 'Licor de ginja'] },
+    { city: 'Evora', distance_km: 130, how: 'Trem ou ônibus (1h30)', highlights: ['Templo Romano', 'Capela dos Ossos', 'Cromeleque dos Almendres'] },
+  ],
+  madrid: [
+    { city: 'Toledo', distance_km: 70, how: 'Trem alta velocidade (30 min)', highlights: ['Catedral Gótica', 'Sinagoga del Tránsito', 'El Greco Museu'], tip: 'Um dia inteiro não é demais.' },
+    { city: 'Segovia', distance_km: 90, how: 'Trem (35 min)', highlights: ['Aqueduto Romano', 'Alcázar de Segóvia', 'Catedral'] },
+    { city: 'Avila', distance_km: 110, how: 'Trem (1h30)', highlights: ['Muralhas medievais UNESCO', 'Catedral de Ávila'] },
+  ],
+  'rio de janeiro': [
+    { city: 'Petrópolis', distance_km: 65, how: 'Ônibus (1h30)', highlights: ['Museu Imperial', 'Palácio de Cristal', 'Casa do Santos Dumont'], tip: 'Clima serrano muito mais fresco que o Rio.' },
+    { city: 'Paraty', distance_km: 240, how: 'Ônibus (4h)', highlights: ['Centro histórico colonial UNESCO', 'Baías e ilhas', 'Cachoeiras'], tip: 'Vale pernoite mas dá bate e volta também.' },
+    { city: 'Buzios', distance_km: 175, how: 'Ônibus (2h30)', highlights: ['27 praias', 'Orla Bardot', 'Piscinas naturais'] },
+  ],
+  'sao paulo': [
+    { city: 'Campos do Jordão', distance_km: 185, how: 'Ônibus (3h) ou carro', highlights: ['Arquitetura europeia', 'Serra da Mantiqueira', 'Artesanato local'], tip: 'Melhor no inverno durante o festival.' },
+    { city: 'Holambra', distance_km: 130, how: 'Carro (2h)', highlights: ['Cidade de imigração holandesa', 'Flores exóticas', 'Museu da imigração'] },
+    { city: 'Guaruja', distance_km: 85, how: 'Carro ou ônibus (1h30)', highlights: ['Praias de água limpa', 'Piscinas naturais'] },
+    { city: 'Atibaia', distance_km: 65, how: 'Carro (1h)', highlights: ['Turismo rural', 'Festival de morangos', 'Serra do Japi'] },
+  ],
+  tokyo: [
+    { city: 'Nikko', distance_km: 150, how: 'Trem (50 min)', highlights: ['Santuário de Toshogu', 'Cataratas de Kegon', 'Floresta de cedros'] },
+    { city: 'Kamakura', distance_km: 50, how: 'Trem (1h)', highlights: ['Buda gigante (Daibutsu)', 'Templos Zen', 'Praias'] },
+    { city: 'Hakone', distance_km: 80, how: 'Trem Romancecar (1h25)', highlights: ['Vista do Monte Fuji', 'Onsen (banhos termais)', 'Lago Ashi'] },
+    { city: 'Yokohama', distance_km: 30, how: 'Trem (30 min)', highlights: ['Chinatown maior da Ásia', 'Minato Mirai', 'Ramen Museum'] },
+  ],
+  istanbul: [
+    { city: 'Ilhas dos Príncipes', distance_km: 15, how: 'Balsa (1h10)', highlights: ['Ilhas sem carros', 'Passeio de charrete', 'Praias tranquilas'] },
+    { city: 'Bursa', distance_km: 90, how: 'Balsa + ônibus (2h15)', highlights: ['Grande Mesquita', 'Monte Uludag para trekking', 'Kebab de Bursa'] },
+  ],
+  'buenos aires': [
+    { city: 'Tigre', distance_km: 30, how: 'Trem (1h)', highlights: ['Delta do Paraná', 'Canais de barco', 'Puerto de Frutos'] },
+    { city: 'Colonia del Sacramento', distance_km: 50, how: 'Balsa (1h)', highlights: ['Cidade colonial portuguesa UNESCO', 'Bairro Histórico', 'Farol'] },
+    { city: 'Montevideu', distance_km: 250, how: 'Balsa (2h30)', highlights: ['Rambla de Montevidéu', 'Ciudad Vieja', 'Mercado del Puerto'] },
+  ],
+  singapore: [
+    { city: 'Malaca', distance_km: 220, how: 'Ônibus (2h30)', highlights: ['Cidade Patrimônio UNESCO', 'Cultura Peranakan', 'Jonker Street'], tip: 'Atravessa a fronteira com a Malásia.' },
+    { city: 'Johor Bahru', distance_km: 30, how: 'Ônibus (1h)', highlights: ['Legoland', 'Compras mais baratas', 'Cidade moderna'] },
+  ],
+};
+
+function getDayTrips(cities: string[]): { mainCity: string; trips: DayTrip[] } | null {
+  for (const city of cities) {
+    const cl = city.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ').trim();
+    for (const key of Object.keys(DAY_TRIPS)) {
+      const kn = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (cl.includes(kn) || kn.includes(cl))
+        return { mainCity: city, trips: DAY_TRIPS[key] };
+    }
+  }
+  return null;
+}
+
 function checkSeasonality(cities: string[], start: string, end: string) {
   if (!start || !end) return [];
   const months = new Set<number>();
@@ -172,6 +275,7 @@ export default function TripDetailPage() {
   const [showPackingList, setShowPackingList] = useState(false);
   const [packingChecked, setPackingChecked] = useState<Set<string>>(new Set());
   const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
+  const [showDayTrips, setShowDayTrips] = useState(true);
 
   useEffect(() => {
     const loadTripData = async () => {
@@ -938,6 +1042,62 @@ export default function TripDetailPage() {
             })}
           </div>
         )}
+
+        {/* Bate e Volta */}
+        {trip && (() => {
+          const cities = (trip.destinations || [{ city: trip.destination_city }]).map((d: any) => d.city);
+          const result = getDayTrips(cities);
+          if (!result) return null;
+          return (
+            <div className="mt-8 print:hidden">
+              <button
+                onClick={() => setShowDayTrips(v => !v)}
+                className="w-full flex items-center justify-between bg-white rounded-xl shadow-sm px-6 py-4 hover:shadow-md transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🚆</span>
+                  <div className="text-left">
+                    <p className="font-bold text-gray-900">Bate e Voltas de {result.mainCity}</p>
+                    <p className="text-sm text-gray-500">{result.trips.length} destinos próximos para explorar em 1 dia</p>
+                  </div>
+                </div>
+                <span className="text-gray-400 group-hover:text-brand-teal transition text-sm">{showDayTrips ? '▲ Recolher' : '▼ Ver sugestões'}</span>
+              </button>
+              {showDayTrips && (
+                <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                  {result.trips.map(dt => (
+                    <div key={dt.city} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h4 className="font-bold text-gray-900">{dt.city}</h4>
+                          <p className="text-xs text-gray-500 mt-0.5">📍 {dt.distance_km}km &nbsp;·&nbsp; 🚌 {dt.how}</p>
+                        </div>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(result.mainCity)}&destination=${encodeURIComponent(dt.city)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 text-xs bg-brand-teal text-white px-2.5 py-1 rounded-full hover:bg-brand-teal-dark transition font-medium whitespace-nowrap"
+                        >
+                          Como ir
+                        </a>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {dt.highlights.map(h => (
+                          <span key={h} className="text-xs bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded-full">{h}</span>
+                        ))}
+                      </div>
+                      {dt.tip && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                          💡 {dt.tip}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </main>
 
       {addModalDay !== null && (
