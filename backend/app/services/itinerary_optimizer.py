@@ -158,18 +158,32 @@ class ItineraryOptimizer:
         self, attractions: List[Dict[str, Any]], num_days: int, rainy_days: Set[int] = None
     ) -> List[Dict[str, Any]]:
         """Cluster attractions geographically with K-Means so that nearby places
-        land on the same day. Rainy days get indoor-heavy clusters."""
+        land on the same day. Restaurants/cafes are added as supplements to days
+        that already have main attractions — never as a day's sole anchor.
+        k is bounded so each cluster contains at least MIN_PER_DAY main attractions."""
         if not attractions or num_days <= 0:
             return []
 
         TARGET_MINUTES = 6 * 60   # 6 h of activities per day
-        MAX_PER_DAY = 7
+        MAX_PER_DAY = 6
+        MIN_PER_DAY = 3           # minimum main attractions per populated day
 
-        pool = attractions[:MAX_PER_DAY * num_days]
-        n = len(pool)
-        k = min(num_days, n)
+        # --- Separate restaurants/cafes from main sightseeing attractions ---
+        RESTAURANT_CATS = {"restaurant", "cafe", "bar"}
+        all_pool = attractions[: MAX_PER_DAY * num_days]
+        main_pool = [a for a in all_pool if a.get("category", "").lower() not in RESTAURANT_CATS]
+        resto_pool = [a for a in all_pool if a.get("category", "").lower() in RESTAURANT_CATS]
 
-        coords = [(a["latitude"], a["longitude"]) for a in pool]
+        # Fallback: if only restaurants in DB, treat them as main
+        if not main_pool:
+            main_pool = all_pool
+            resto_pool = []
+
+        n = len(main_pool)
+        # k ≤ floor(n / MIN_PER_DAY) ensures each cluster has ≥ MIN_PER_DAY attractions on average
+        k = max(1, min(num_days, n // MIN_PER_DAY))
+
+        coords = [(a["latitude"], a["longitude"]) for a in main_pool]
 
         # --- Geographic K-Means ---
         centroids = self._kmeans_init(coords, k)
@@ -182,7 +196,6 @@ class ItineraryOptimizer:
                 if assignments[idx] != nearest:
                     assignments[idx] = nearest
                     changed = True
-            # Recompute centroids
             for c in range(k):
                 cluster_coords = [coords[i] for i in range(n) if assignments[i] == c]
                 if cluster_coords:
@@ -199,14 +212,13 @@ class ItineraryOptimizer:
             clusters[c].append(idx)
 
         cluster_scores = {
-            c: sum(pool[i].get("score", 1) for i in idxs) / max(len(idxs), 1)
+            c: sum(main_pool[i].get("score", 1) for i in idxs) / max(len(idxs), 1)
             for c, idxs in clusters.items()
         }
 
         if rainy_days:
-            # Indoor ratio per cluster: rainy days get most-indoor clusters
             indoor_ratio = {
-                c: sum(1 for i in idxs if pool[i].get("category", "").lower() in self.INDOOR_CATEGORIES)
+                c: sum(1 for i in idxs if main_pool[i].get("category", "").lower() in self.INDOOR_CATEGORIES)
                    / max(len(idxs), 1)
                 for c, idxs in clusters.items()
             }
@@ -222,7 +234,6 @@ class ItineraryOptimizer:
             for i, day in enumerate(sunny_days):
                 if i < len(remaining):
                     cluster_to_day[remaining[i]] = day
-            # Fill any unmapped clusters to leftover days
             assigned_days = set(cluster_to_day.values())
             leftover_days = [d for d in range(1, num_days + 1) if d not in assigned_days]
             unmapped = [c for c in clusters if c not in cluster_to_day]
@@ -240,10 +251,9 @@ class ItineraryOptimizer:
 
         for c in sorted(cluster_to_day.keys(), key=lambda c: cluster_to_day[c]):
             day = cluster_to_day[c]
-            # Within each geographic cluster sort by score descending
-            sorted_idxs = sorted(clusters[c], key=lambda i: pool[i].get("score", 1), reverse=True)
+            sorted_idxs = sorted(clusters[c], key=lambda i: main_pool[i].get("score", 1), reverse=True)
             for attr_i in sorted_idxs:
-                attr = pool[attr_i]
+                attr = main_pool[attr_i]
                 duration = attr.get("visit_duration_minutes", 60)
                 if days_minutes[day] + duration <= TARGET_MINUTES and days_counts[day] < MAX_PER_DAY:
                     days_counts[day] += 1
@@ -258,16 +268,46 @@ class ItineraryOptimizer:
                 else:
                     overflow.append(attr)
 
-        # Place overflow into the least-full days that still have capacity
+        # Place overflow main attractions into days that already have content
         for attr in overflow:
             duration = attr.get("visit_duration_minutes", 60)
             eligible = [
                 d for d in range(1, num_days + 1)
-                if days_counts[d] < MAX_PER_DAY and days_minutes[d] + duration <= TARGET_MINUTES
+                if days_counts[d] > 0
+                and days_counts[d] < MAX_PER_DAY
+                and days_minutes[d] + duration <= TARGET_MINUTES
             ]
+            if not eligible:
+                eligible = [
+                    d for d in range(1, num_days + 1)
+                    if days_counts[d] < MAX_PER_DAY and days_minutes[d] + duration <= TARGET_MINUTES
+                ]
             if not eligible:
                 break
             target_day = min(eligible, key=lambda d: days_minutes[d])
+            days_counts[target_day] += 1
+            days_minutes[target_day] += duration
+            itinerary.append({
+                "day_number": target_day,
+                "order_in_day": days_counts[target_day],
+                "attraction": attr,
+                "start_time": None,
+                "notes": "",
+            })
+
+        # Add restaurants to days that already have main attractions (as lunch/dinner stops)
+        for attr in resto_pool:
+            duration = attr.get("visit_duration_minutes", 60)
+            eligible = [
+                d for d in range(1, num_days + 1)
+                if days_counts[d] > 0
+                and days_counts[d] < MAX_PER_DAY
+                and days_minutes[d] + duration <= TARGET_MINUTES
+            ]
+            if not eligible:
+                break
+            # Prefer the day with the most planned time (most likely to benefit from a meal stop)
+            target_day = max(eligible, key=lambda d: days_minutes[d])
             days_counts[target_day] += 1
             days_minutes[target_day] += duration
             itinerary.append({

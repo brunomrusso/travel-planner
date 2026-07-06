@@ -25,7 +25,7 @@ def _map_osm_tags(tags: dict) -> Tuple[str, int]:
     if amenity == "spa":             return "spa", 90
     if leisure in ("park", "garden", "botanical_garden"): return "park", 90
     if leisure == "nature_reserve":  return "park", 120
-    if historic in ("castle", "fort", "fortification"): return "historic", 90
+    if historic in ("castle", "fort", "fortification", "palace", "city_gate"): return "historic", 90
     if historic in ("monument", "memorial", "ruins"): return "historic", 45
     if natural == "beach":           return "beach", 120
     return "historic", 60
@@ -51,24 +51,35 @@ async def _geocode_city(city: str) -> Optional[Tuple[float, float]]:
 
 
 async def _fetch_osm_pois(city: str, lat: float, lon: float, radius_m: int = 15000) -> List[Dict[str, Any]]:
-    """Query Overpass API for tourist POIs within radius of (lat, lon)."""
+    """Query Overpass API for tourist POIs within radius of (lat, lon).
+    Includes node, way and relation so large landmarks (castles, bridges, parks)
+    stored as areas are captured. Uses 'out center' to get centroid coords for ways/relations."""
+    tourism_tags = "attraction|museum|gallery|viewpoint|theme_park|zoo|aquarium|artwork|monument"
+    historic_tags = "castle|monument|ruins|memorial|fort|fortification|palace|city_gate"
+    leisure_tags = "park|garden|nature_reserve|botanical_garden"
     query = f"""
-[out:json][timeout:30];
+[out:json][timeout:45];
 (
-  node["tourism"~"^(attraction|museum|gallery|viewpoint|theme_park|zoo|aquarium|artwork|monument)$"](around:{radius_m},{lat},{lon});
+  node["tourism"~"^({tourism_tags})$"](around:{radius_m},{lat},{lon});
+  way["tourism"~"^({tourism_tags})$"](around:{radius_m},{lat},{lon});
+  relation["tourism"~"^({tourism_tags})$"](around:{radius_m},{lat},{lon});
   node["amenity"~"^(restaurant|cafe|spa)$"]["name"](around:{radius_m},{lat},{lon});
-  node["leisure"~"^(park|garden|nature_reserve)$"]["name"](around:{radius_m},{lat},{lon});
-  node["historic"~"^(castle|monument|ruins|memorial)$"]["name"](around:{radius_m},{lat},{lon});
+  node["leisure"~"^({leisure_tags})$"]["name"](around:{radius_m},{lat},{lon});
+  way["leisure"~"^({leisure_tags})$"]["name"](around:{radius_m},{lat},{lon});
+  relation["leisure"~"^({leisure_tags})$"]["name"](around:{radius_m},{lat},{lon});
+  node["historic"~"^({historic_tags})$"]["name"](around:{radius_m},{lat},{lon});
+  way["historic"~"^({historic_tags})$"]["name"](around:{radius_m},{lat},{lon});
+  relation["historic"~"^({historic_tags})$"]["name"](around:{radius_m},{lat},{lon});
   node["natural"="beach"]["name"](around:{radius_m},{lat},{lon});
 );
-out body;
+out center;
 """
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://overpass-api.de/api/interpreter",
                 data={"data": query},
-                timeout=35,
+                timeout=50,
             )
             data = resp.json()
     except Exception:
@@ -87,8 +98,10 @@ out body;
         key = name.lower()
         if key in seen:
             continue
-        lat_el = el.get("lat")
-        lon_el = el.get("lon")
+        # nodes have lat/lon directly; ways/relations use center
+        center = el.get("center") or {}
+        lat_el = el.get("lat") or center.get("lat")
+        lon_el = el.get("lon") or center.get("lon")
         if lat_el is None or lon_el is None:
             continue
         seen.add(key)
