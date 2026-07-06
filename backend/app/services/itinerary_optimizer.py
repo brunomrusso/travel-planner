@@ -1,5 +1,5 @@
-from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Dict, Any, Set
+from datetime import datetime, timedelta, date
 from uuid import UUID
 from app.services.osrm_service import OSRMService
 from app.services.attractions_fetcher import enrich_city_attractions
@@ -7,6 +7,20 @@ from collections import defaultdict
 import math
 
 class ItineraryOptimizer:
+    ENERGY_LEVEL: Dict[str, int] = {
+        # 1 = morning (high energy / active outdoors)
+        "hiking": 1, "park": 1, "beach": 1, "monument": 1,
+        # 2 = afternoon (culture / exploration)
+        "museum": 2, "gallery": 2, "historic": 2, "zoo": 2, "market": 2, "shopping": 2,
+        # 3 = evening (relaxed / social)
+        "restaurant": 3, "cafe": 3, "bar": 3, "spa": 3, "entertainment": 3,
+    }
+
+    INDOOR_CATEGORIES: set = {
+        "museum", "gallery", "restaurant", "cafe", "bar",
+        "entertainment", "shopping", "spa", "cinema", "theatre",
+    }
+
     TRAVELER_PROFILES = {
         "adventure": {"hiking": 5, "nature": 5, "park": 4, "museum": 1, "restaurant": 2},
         "cultural": {"museum": 5, "gallery": 5, "historic": 4, "park": 2, "restaurant": 3},
@@ -34,12 +48,28 @@ class ItineraryOptimizer:
 
         return merged or self.TRAVELER_PROFILES["cultural"]
 
-    async def generate_itinerary(self, trip_id: UUID, trip: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def generate_itinerary(
+        self, trip_id: UUID, trip: Dict[str, Any], weather_data: List[Dict] = None
+    ) -> List[Dict[str, Any]]:
         weights = self._merge_profile_weights(trip.get("traveler_profile", "cultural"))
 
         start_date = datetime.fromisoformat(trip["start_date"])
         end_date = datetime.fromisoformat(trip["end_date"])
         num_days = (end_date - start_date).days + 1
+
+        # Build global rainy_days set from weather forecast
+        global_rainy_days: Set[int] = set()
+        if weather_data:
+            start_d = start_date.date()
+            for w in weather_data:
+                if w.get("is_rainy"):
+                    try:
+                        d = date.fromisoformat(w["date"])
+                        day_num = (d - start_d).days + 1
+                        if 1 <= day_num <= num_days:
+                            global_rainy_days.add(day_num)
+                    except Exception:
+                        pass
 
         destinations = trip.get("destinations") or []
         if not destinations:
@@ -51,7 +81,6 @@ class ItineraryOptimizer:
         explicit = [dest.get("days") for dest in destinations]
         if all(isinstance(d, int) and d > 0 for d in explicit):
             city_days_list = list(explicit)
-            # Adjust last city to absorb rounding
             city_days_list[-1] = max(1, num_days - sum(city_days_list[:-1]))
         else:
             base = max(1, num_days // len(destinations))
@@ -65,6 +94,13 @@ class ItineraryOptimizer:
             city_start_day = current_day
             current_day += city_days
 
+            # Translate global rainy days to local (per-city) day numbers
+            city_rainy_days: Set[int] = {
+                d - city_start_day + 1
+                for d in global_rainy_days
+                if city_start_day <= d < city_start_day + city_days
+            }
+
             min_needed = city_days * 5
             await enrich_city_attractions(self.supabase, city, min_needed)
 
@@ -74,7 +110,7 @@ class ItineraryOptimizer:
                 continue
 
             scored = self._score_attractions(attractions, weights)
-            city_itinerary = self._distribute_attractions_by_day(scored, city_days)
+            city_itinerary = self._distribute_attractions_by_day(scored, city_days, city_rainy_days)
 
             # Offset day numbers to global trip days
             for item in city_itinerary:
@@ -118,9 +154,11 @@ class ItineraryOptimizer:
             centroids.append(farthest)
         return centroids
 
-    def _distribute_attractions_by_day(self, attractions: List[Dict[str, Any]], num_days: int) -> List[Dict[str, Any]]:
+    def _distribute_attractions_by_day(
+        self, attractions: List[Dict[str, Any]], num_days: int, rainy_days: Set[int] = None
+    ) -> List[Dict[str, Any]]:
         """Cluster attractions geographically with K-Means so that nearby places
-        land on the same day. Falls back gracefully for tiny pools."""
+        land on the same day. Rainy days get indoor-heavy clusters."""
         if not attractions or num_days <= 0:
             return []
 
@@ -155,7 +193,7 @@ class ItineraryOptimizer:
             if not changed:
                 break
 
-        # --- Map clusters → days (highest avg score cluster = day 1) ---
+        # --- Map clusters → days ---
         clusters: Dict[int, List[int]] = {c: [] for c in range(k)}
         for idx, c in enumerate(assignments):
             clusters[c].append(idx)
@@ -164,8 +202,35 @@ class ItineraryOptimizer:
             c: sum(pool[i].get("score", 1) for i in idxs) / max(len(idxs), 1)
             for c, idxs in clusters.items()
         }
-        sorted_clusters = sorted(clusters.keys(), key=lambda c: cluster_scores[c], reverse=True)
-        cluster_to_day = {c: day + 1 for day, c in enumerate(sorted_clusters)}
+
+        if rainy_days:
+            # Indoor ratio per cluster: rainy days get most-indoor clusters
+            indoor_ratio = {
+                c: sum(1 for i in idxs if pool[i].get("category", "").lower() in self.INDOOR_CATEGORIES)
+                   / max(len(idxs), 1)
+                for c, idxs in clusters.items()
+            }
+            clusters_by_indoor = sorted(clusters.keys(), key=lambda c: indoor_ratio[c], reverse=True)
+            clusters_by_outdoor = sorted(clusters.keys(), key=lambda c: indoor_ratio[c])
+            cluster_to_day: Dict[int, int] = {}
+            rainy_sorted = sorted(rainy_days)
+            sunny_days = [d for d in range(1, num_days + 1) if d not in rainy_days]
+            for i, day in enumerate(rainy_sorted):
+                if i < len(clusters_by_indoor):
+                    cluster_to_day[clusters_by_indoor[i]] = day
+            remaining = [c for c in clusters_by_outdoor if c not in cluster_to_day]
+            for i, day in enumerate(sunny_days):
+                if i < len(remaining):
+                    cluster_to_day[remaining[i]] = day
+            # Fill any unmapped clusters to leftover days
+            assigned_days = set(cluster_to_day.values())
+            leftover_days = [d for d in range(1, num_days + 1) if d not in assigned_days]
+            unmapped = [c for c in clusters if c not in cluster_to_day]
+            for c, d in zip(unmapped, leftover_days):
+                cluster_to_day[c] = d
+        else:
+            sorted_clusters = sorted(clusters.keys(), key=lambda c: cluster_scores[c], reverse=True)
+            cluster_to_day = {c: day + 1 for day, c in enumerate(sorted_clusters)}
 
         # --- Build itinerary with per-day time cap ---
         days_minutes: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
@@ -173,7 +238,7 @@ class ItineraryOptimizer:
         itinerary: List[Dict[str, Any]] = []
         overflow: List[Dict[str, Any]] = []
 
-        for c in sorted_clusters:
+        for c in sorted(cluster_to_day.keys(), key=lambda c: cluster_to_day[c]):
             day = cluster_to_day[c]
             # Within each geographic cluster sort by score descending
             sorted_idxs = sorted(clusters[c], key=lambda i: pool[i].get("score", 1), reverse=True)
@@ -216,47 +281,78 @@ class ItineraryOptimizer:
         return itinerary
     
     async def _optimize_daily_routes(self, itinerary: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        days = {}
+        days: Dict[int, List] = {}
         for item in itinerary:
             day = item["day_number"]
             if day not in days:
                 days[day] = []
             days[day].append(item)
-        
+
         optimized = []
         for day, items in sorted(days.items()):
+            # Tag energy level and indoor/outdoor for each item
+            for item in items:
+                cat = item["attraction"].get("category", "").lower()
+                item["energy_level"] = self.ENERGY_LEVEL.get(cat, 2)
+                item["is_outdoor"] = cat not in self.INDOOR_CATEGORIES
+
             if len(items) <= 1:
+                for item in items:
+                    item["order_in_day"] = 1
                 optimized.extend(items)
                 continue
-            
-            coordinates = [(item["attraction"]["latitude"], item["attraction"]["longitude"]) for item in items]
-            
-            optimized_coords = self._nearest_neighbor_tsp(coordinates)
-            
-            for order, coord_idx in enumerate(optimized_coords, 1):
-                item = items[coord_idx]
+
+            # Split into energy tiers: 1=morning, 2=afternoon, 3=evening
+            tiers: Dict[int, List] = {1: [], 2: [], 3: []}
+            for item in items:
+                tiers[item["energy_level"]].append(item)
+
+            # Apply nearest-neighbor within each tier, chaining between tiers
+            ordered = []
+            prev_coord = None
+            for tier_num in [1, 2, 3]:
+                tier_items = tiers[tier_num]
+                if not tier_items:
+                    continue
+                tier_coords = [
+                    (i["attraction"]["latitude"], i["attraction"]["longitude"])
+                    for i in tier_items
+                ]
+                start = 0
+                if prev_coord and len(tier_items) > 1:
+                    start = min(
+                        range(len(tier_items)),
+                        key=lambda idx: self._distance(prev_coord, tier_coords[idx]),
+                    )
+                path = self._nearest_neighbor_tsp_from(tier_coords, start)
+                for idx in path:
+                    ordered.append(tier_items[idx])
+                last = ordered[-1]["attraction"]
+                prev_coord = (last["latitude"], last["longitude"])
+
+            for order, item in enumerate(ordered, 1):
                 item["order_in_day"] = order
                 optimized.append(item)
-        
+
         return optimized
-    
-    def _nearest_neighbor_tsp(self, coordinates: List[tuple]) -> List[int]:
+
+    def _nearest_neighbor_tsp_from(self, coordinates: List[tuple], start: int = 0) -> List[int]:
         if not coordinates:
             return []
-        
         n = len(coordinates)
         unvisited = set(range(n))
-        current = 0
+        current = start
         path = [current]
         unvisited.remove(current)
-        
         while unvisited:
             nearest = min(unvisited, key=lambda x: self._distance(coordinates[current], coordinates[x]))
             path.append(nearest)
             unvisited.remove(nearest)
             current = nearest
-        
         return path
+
+    def _nearest_neighbor_tsp(self, coordinates: List[tuple]) -> List[int]:
+        return self._nearest_neighbor_tsp_from(coordinates, 0)
     
     def _distance(self, coord1: tuple, coord2: tuple) -> float:
         lat1, lon1 = coord1

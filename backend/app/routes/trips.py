@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from uuid import UUID
+from datetime import datetime
 from app.models.trip import Trip, TripCreate, TripUpdate
 from app.database import get_supabase
 from app.services.itinerary_optimizer import ItineraryOptimizer
 from app.services.osm_service import OSMService
 from app.services.sample_attractions import get_sample_attractions
+from app.services.weather_service import WeatherService
 from app.auth import get_user_id_from_token
 
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -175,6 +177,26 @@ async def get_available_attractions(trip_id: UUID, user_id: str = Depends(get_us
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+@router.get("/{trip_id}/weather")
+async def get_trip_weather(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
+    supabase = get_supabase()
+    try:
+        trip_resp = supabase.table("trips").select("*").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        trip = trip_resp.data[0]
+        city = (trip.get("destinations") or [{}])[0].get("city") or trip["destination_city"]
+        start = datetime.fromisoformat(trip["start_date"]).date()
+        end = datetime.fromisoformat(trip["end_date"]).date()
+        weather_svc = WeatherService()
+        forecast = await weather_svc.get_forecast(city, start, end)
+        return forecast
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post("/{trip_id}/generate-itinerary")
 async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
     supabase = get_supabase()
@@ -192,8 +214,19 @@ async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_f
         for dest in destinations:
             await _ensure_attractions_for_city(dest["city"], supabase)
 
+        # Fetch weather forecast to enable weather-aware scheduling
+        weather_data = []
+        try:
+            city = destinations[0]["city"]
+            start = datetime.fromisoformat(trip["start_date"]).date()
+            end = datetime.fromisoformat(trip["end_date"]).date()
+            weather_svc = WeatherService()
+            weather_data = await weather_svc.get_forecast(city, start, end)
+        except Exception:
+            pass
+
         optimizer = ItineraryOptimizer(supabase)
-        itinerary = await optimizer.generate_itinerary(trip_id, trip)
+        itinerary = await optimizer.generate_itinerary(trip_id, trip, weather_data)
 
         if not itinerary:
             cities = ", ".join(d["city"] for d in destinations)

@@ -16,6 +16,8 @@ const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   loading: () => <div className="h-[280px] bg-gray-100 animate-pulse flex items-center justify-center text-gray-400">Carregando mapa...</div>,
 });
 
+const OUTDOOR_CATEGORIES = new Set(['park', 'beach', 'hiking', 'zoo', 'market', 'monument']);
+
 const CATEGORY_ICONS: Record<string, string> = {
   restaurant: '🍽️', museum: '🏛️', park: '🌿', historic: '🏰',
   entertainment: '🎭', beach: '🏖️', spa: '💆', zoo: '🦁',
@@ -125,7 +127,7 @@ export default function TripDetailPage() {
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
-  const [weatherByDate, setWeatherByDate] = useState<Record<string, { icon: string; maxC: number; minC: number }>>({});
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, { icon: string; maxC: number; minC: number; is_rainy: boolean; description: string }>>({});
   const [dayNotes, setDayNotes] = useState<Record<number, string>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -318,25 +320,27 @@ export default function TripDetailPage() {
   };
 
   useEffect(() => {
-    if (!trip || itinerary.length === 0) return;
-    const city = trip.destination_city || trip.destinations?.[0]?.city;
-    if (!city) return;
-    fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`)
-      .then(r => r.json())
-      .then(data => {
-        const map: Record<string, { icon: string; maxC: number; minC: number }> = {};
-        for (const w of (data.weather || [])) {
-          const code = parseInt(w.hourly?.[4]?.weatherCode ?? '113');
+    if (!trip || !token) return;
+    axios
+      .get(`${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/weather`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 12000,
+      })
+      .then(res => {
+        const map: Record<string, { icon: string; maxC: number; minC: number; is_rainy: boolean; description: string }> = {};
+        for (const w of (res.data || [])) {
           map[w.date] = {
-            icon: getWeatherIcon(code),
-            maxC: parseInt(w.maxtempC),
-            minC: parseInt(w.mintempC),
+            icon: w.icon,
+            maxC: w.temp_max ?? '--',
+            minC: w.temp_min ?? '--',
+            is_rainy: w.is_rainy,
+            description: w.description,
           };
         }
         setWeatherByDate(map);
       })
       .catch(() => {});
-  }, [trip?.destination_city, itinerary.length]);
+  }, [trip?.id, token]);
 
   const handleGenerateItinerary = async () => {
     setIsGenerating(true);
@@ -568,7 +572,22 @@ export default function TripDetailPage() {
                     <div>
                       <h3 className="text-white font-bold text-lg flex items-center gap-2 flex-wrap">
                         <span className="whitespace-nowrap">Dia {dayIndex + 1}</span>
-                        {(() => { const dk = dayDate.toISOString().split('T')[0]; const w = weatherByDate[dk]; return w ? ( <span className="flex items-center gap-1 bg-white/20 rounded-lg px-2 py-0.5 text-sm font-normal"> <span>{w.icon}</span> <span>{w.maxC}°</span> <span className="opacity-70 text-xs">{w.minC}°</span> </span> ) : null; })()}
+                        {(() => {
+                            const dk = dayDate.toISOString().split('T')[0];
+                            const w = weatherByDate[dk];
+                            if (!w) return null;
+                            return (
+                              <span
+                                className={`flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-sm font-normal ${w.is_rainy ? 'bg-blue-500/30' : 'bg-white/20'}`}
+                                title={w.description}
+                              >
+                                <span>{w.icon}</span>
+                                <span>{w.maxC}°</span>
+                                <span className="opacity-70 text-xs">{w.minC}°</span>
+                                {w.is_rainy && <span className="text-xs font-semibold">Chuva</span>}
+                              </span>
+                            );
+                          })()}
                         {(() => {
                           const firstAttr = dayItems[0] ? attractions.find(a => a.id === dayItems[0].attraction_id) : null;
                           const cityName = firstAttr?.city;
@@ -719,11 +738,23 @@ export default function TripDetailPage() {
                                     <h4 className={`font-bold truncate group-hover:text-brand-teal transition ${
                                       visited.has(item.attraction_id) ? 'line-through text-gray-400' : 'text-gray-900'
                                     }`}>{attraction?.name || 'Atração'}</h4>
-                                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                                    <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
                                       {item.start_time && (
                                         <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
                                       )}
                                       <span>{categoryPt}</span>
+                                      {(() => {
+                                        const dk = dayDate.toISOString().split('T')[0];
+                                        const w = weatherByDate[dk];
+                                        if (w?.is_rainy && attraction && OUTDOOR_CATEGORIES.has(attraction.category)) {
+                                          return (
+                                            <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 font-medium">
+                                              🌧️ Ao ar livre
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
                                     </p>
                                   </div>
                                   <div className="flex-shrink-0 flex items-center gap-2">
