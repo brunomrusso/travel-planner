@@ -8,8 +8,7 @@ from pydantic import BaseModel
 from app.models.trip import Trip, TripCreate, TripUpdate
 from app.database import get_supabase
 from app.services.itinerary_optimizer import ItineraryOptimizer
-from app.services.osm_service import OSMService
-from app.services.sample_attractions import get_sample_attractions
+from app.services.attractions_fetcher import enrich_city_attractions
 from app.services.weather_service import WeatherService
 from app.auth import get_user_id_from_token
 
@@ -94,33 +93,9 @@ async def delete_trip(trip_id: UUID, user_id: str = Depends(get_user_id_from_tok
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 async def _ensure_attractions_for_city(city: str, supabase) -> int:
-    check = supabase.table("attractions").select("id").eq("city", city).limit(1).execute()
-    if check.data:
-        return 0
-    print(f"No attractions for '{city}', fetching...")
-    osm_service = OSMService()
-    osm_attrs = await osm_service.fetch_attractions(city)
-    if not osm_attrs:
-        print(f"OSM unavailable, using sample data for '{city}'")
-        osm_attrs = get_sample_attractions(city)
-    saved = 0
-    for attr in osm_attrs:
-        try:
-            supabase.table("attractions").insert({
-                "osm_id": attr.get("osm_id"),
-                "name": attr["name"],
-                "category": attr["category"],
-                "latitude": attr["latitude"],
-                "longitude": attr["longitude"],
-                "rating": attr.get("rating", 0),
-                "visit_duration_minutes": attr.get("visit_duration_minutes", 60),
-                "city": city
-            }).execute()
-            saved += 1
-        except Exception:
-            pass
-    print(f"Saved {saved} attractions for '{city}'")
-    return saved
+    """Ensure at least 10 attractions exist for the city using the efficient single-query fetcher."""
+    return await enrich_city_attractions(supabase, city, min_needed=10)
+
 
 @router.patch("/{trip_id}/complete")
 async def complete_trip(trip_id: UUID, user_id: str = Depends(get_user_id_from_token)):
