@@ -276,6 +276,10 @@ export default function TripDetailPage() {
   const [packingChecked, setPackingChecked] = useState<Set<string>>(new Set());
   const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
   const [showDayTrips, setShowDayTrips] = useState(true);
+  const [dayTripModal, setDayTripModal] = useState<{ trip: DayTrip; mainCity: string; smartDay: number } | null>(null);
+  const [dayTripDay, setDayTripDay] = useState(1);
+  const [addingDayTrip, setAddingDayTrip] = useState(false);
+  const [dayTripMsg, setDayTripMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     const loadTripData = async () => {
@@ -474,6 +478,48 @@ export default function TripDetailPage() {
       .filter((a: any) => a._dist < 0.7)
       .sort((a: any, b: any) => a._dist - b._dist)
       .slice(0, 2);
+  };
+
+  const openDayTripModal = (dt: DayTrip, mainCity: string) => {
+    const nDays = numDays || 1;
+    let best = 1, bestScore = Infinity;
+    for (let d = 1; d <= nDays; d++) {
+      const dayItems = itinerary.filter(it => it.day_number === d);
+      const mins = dayItems.reduce((acc, it) => acc + (attractions.find(a => a.id === it.attraction_id)?.visit_duration_minutes || 0), 0);
+      const score = dayItems.length * 100 + mins;
+      if (score < bestScore) { bestScore = score; best = d; }
+    }
+    setDayTripDay(best);
+    setDayTripMsg(null);
+    setDayTripModal({ trip: dt, mainCity, smartDay: best });
+  };
+
+  const handleAddDayTrip = async () => {
+    if (!dayTripModal || addingDayTrip) return;
+    setAddingDayTrip(true);
+    setDayTripMsg(null);
+    try {
+      const { data } = await getSession();
+      const headers = { Authorization: `Bearer ${data!.session!.access_token}` };
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/add-day-trip`,
+        { city: dayTripModal.trip.city, day_number: dayTripDay, max_attractions: 4 },
+        { headers, timeout: 30000 }
+      );
+      const newItems: ItineraryItem[] = res.data.added;
+      const newAttrs: Attraction[] = res.data.attractions;
+      setItinerary(prev => [...prev, ...newItems]);
+      setAttractions(prev => {
+        const ids = new Set(prev.map(a => a.id));
+        return [...prev, ...newAttrs.filter((a: Attraction) => !ids.has(a.id))];
+      });
+      setDayTripMsg({ ok: true, text: `✅ ${newItems.length} atra${newItems.length === 1 ? 'ção adicionada' : 'ções adicionadas'} de ${dayTripModal.trip.city} ao Dia ${dayTripDay}!` });
+      setTimeout(() => { setDayTripModal(null); setDayTripMsg(null); }, 2800);
+    } catch (err: any) {
+      setDayTripMsg({ ok: false, text: err.response?.data?.detail || 'Erro ao adicionar. Tente novamente.' });
+    } finally {
+      setAddingDayTrip(false);
+    }
   };
 
   const moveToDay = (item: ItineraryItem, newDay: number) => {
@@ -1091,6 +1137,14 @@ export default function TripDetailPage() {
                           💡 {dt.tip}
                         </p>
                       )}
+                      {itinerary.length > 0 && (
+                        <button
+                          onClick={() => openDayTripModal(dt, result.mainCity)}
+                          className="w-full mt-1 text-xs font-semibold text-brand-teal border border-brand-teal rounded-xl py-2 hover:bg-teal-50 transition"
+                        >
+                          + Adicionar ao Roteiro
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1144,6 +1198,139 @@ export default function TripDetailPage() {
               {availableAttractions.filter(a => !attrSearch || a.name.toLowerCase().includes(attrSearch.toLowerCase())).length === 0 && (
                 <p className="text-gray-400 text-sm text-center py-8">Nenhuma atração disponível.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dayTripModal && (
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !addingDayTrip && setDayTripModal(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">🚆 Adicionar Bate e Volta</h3>
+              <button onClick={() => setDayTripModal(null)} disabled={addingDayTrip} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 disabled:opacity-40">✕</button>
+            </div>
+
+            {/* Destination summary */}
+            <div className="px-5 py-3 bg-gradient-to-r from-teal-50 to-blue-50 border-b border-teal-100 flex items-center gap-3">
+              <span className="text-3xl">🗺️</span>
+              <div>
+                <p className="font-bold text-teal-900">{dayTripModal.trip.city}</p>
+                <p className="text-xs text-teal-700 mt-0.5">
+                  📍 {dayTripModal.trip.distance_km}km de {dayTripModal.mainCity} &nbsp;·&nbsp; 🚌 {dayTripModal.trip.how}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {dayTripModal.trip.highlights.map(h => (
+                    <span key={h} className="text-xs bg-white/70 text-teal-700 px-1.5 py-0.5 rounded-full border border-teal-100">{h}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+              {/* Smart suggestion */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
+                <span className="text-lg flex-shrink-0">🤖</span>
+                <div className="flex-1">
+                  <p className="text-sm text-blue-800">
+                    <strong>Sugestão inteligente:</strong> Dia {dayTripModal.smartDay} tem a menor carga de atividades — ideal para encaixar o bate e volta.
+                  </p>
+                </div>
+                {dayTripDay !== dayTripModal.smartDay && (
+                  <button onClick={() => setDayTripDay(dayTripModal.smartDay)} className="text-xs text-blue-600 underline whitespace-nowrap flex-shrink-0">Usar</button>
+                )}
+              </div>
+
+              {/* Day selector */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Escolha o dia:</p>
+                <div className="space-y-2">
+                  {Array.from({ length: numDays }, (_, i) => {
+                    const dayNum = i + 1;
+                    const dayItems = itinerary.filter(it => it.day_number === dayNum);
+                    const dayMins = dayItems.reduce((acc, it) => acc + (attractions.find(a => a.id === it.attraction_id)?.visit_duration_minutes || 0), 0);
+                    const dayH = Math.floor(dayMins / 60);
+                    const dayM = dayMins % 60;
+                    const isBusy = dayItems.length >= 4 || dayMins >= 360;
+                    const isSmart = dayNum === dayTripModal.smartDay;
+                    const isSelected = dayTripDay === dayNum;
+                    const d = new Date(trip!.start_date + 'T12:00:00');
+                    d.setDate(d.getDate() + i);
+                    const label = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+                    return (
+                      <button key={dayNum} onClick={() => setDayTripDay(dayNum)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${
+                          isSelected ? 'border-brand-teal bg-teal-50' : 'border-gray-100 hover:border-teal-200 bg-white'
+                        }`}>
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            isSelected ? 'bg-brand-teal text-white' : 'bg-gray-100 text-gray-500'
+                          }`}>{dayNum}</span>
+                          <span className="text-sm font-medium text-gray-800 capitalize">{label}</span>
+                          {isSmart && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">Sugerido</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs flex-shrink-0">
+                          <span className={`px-2 py-0.5 rounded-full ${isBusy ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                            {dayItems.length} atv · {dayH}h{dayM > 0 ? dayM + 'min' : ''}
+                          </span>
+                          {isBusy && <span title="Dia cheio">⚠️</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Busy day warning */}
+              {(() => {
+                const dayItems = itinerary.filter(it => it.day_number === dayTripDay);
+                const dayMins = dayItems.reduce((acc, it) => acc + (attractions.find(a => a.id === it.attraction_id)?.visit_duration_minutes || 0), 0);
+                if (dayItems.length < 4 && dayMins < 300) return null;
+                return (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-start gap-2">
+                    <span>⚠️</span>
+                    <p className="text-sm text-orange-700">
+                      O Dia {dayTripDay} já está bem cheio ({dayItems.length} atividades, ~{Math.round(dayMins / 60)}h).
+                      O bate e volta será adicionado, mas considere remover atividades para não sobrecarregar o dia.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Distance notice */}
+              {dayTripModal.trip.distance_km > 100 && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start gap-2">
+                  <span>🕐</span>
+                  <p className="text-sm text-gray-600">
+                    Destino a {dayTripModal.trip.distance_km}km. Considere sair cedo — o transporte de ida e volta consome boa parte do dia.
+                  </p>
+                </div>
+              )}
+
+              {/* Result message */}
+              {dayTripMsg && (
+                <div className={`rounded-xl p-3 text-sm font-medium text-center ${
+                  dayTripMsg.ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
+                }`}>
+                  {dayTripMsg.text}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-100 px-5 py-4 flex gap-3">
+              <button onClick={() => setDayTripModal(null)} disabled={addingDayTrip}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-medium transition disabled:opacity-40">
+                Cancelar
+              </button>
+              <button onClick={handleAddDayTrip} disabled={addingDayTrip || dayTripMsg?.ok === true}
+                className="flex-1 py-2.5 rounded-xl bg-brand-teal text-white text-sm font-semibold hover:bg-brand-teal-dark transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {addingDayTrip
+                  ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Buscando atrações...</>
+                  : '✓ Adicionar ao Roteiro'}
+              </button>
             </div>
           </div>
         </div>

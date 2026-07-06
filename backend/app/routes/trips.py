@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+import uuid as _uuid
 from datetime import datetime
+import statistics
+from pydantic import BaseModel
 from app.models.trip import Trip, TripCreate, TripUpdate
 from app.database import get_supabase
 from app.services.itinerary_optimizer import ItineraryOptimizer
@@ -9,6 +12,11 @@ from app.services.osm_service import OSMService
 from app.services.sample_attractions import get_sample_attractions
 from app.services.weather_service import WeatherService
 from app.auth import get_user_id_from_token
+
+class AddDayTripBody(BaseModel):
+    city: str
+    day_number: int
+    max_attractions: int = 4
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -240,3 +248,68 @@ async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_f
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/{trip_id}/add-day-trip")
+async def add_day_trip(trip_id: UUID, body: AddDayTripBody, user_id: str = Depends(get_user_id_from_token)):
+    """Add a day trip city's attractions to a specific day of the itinerary."""
+    supabase = get_supabase()
+    try:
+        # Verify trip ownership
+        trip_resp = supabase.table("trips").select("*").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not trip_resp.data:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        # Ensure attractions exist for the day trip city (fetch from OSM if needed)
+        await _ensure_attractions_for_city(body.city, supabase)
+
+        # IDs already in this itinerary — avoid duplicates
+        existing_itin = supabase.table("itineraries").select("attraction_id").eq("trip_id", str(trip_id)).execute()
+        existing_ids = {item["attraction_id"] for item in (existing_itin.data or [])}
+
+        # Fetch all attractions for the day trip city
+        attrs_resp = supabase.table("attractions").select("*").eq("city", body.city).execute()
+        all_attrs = attrs_resp.data or []
+        available = [a for a in all_attrs if a["id"] not in existing_ids]
+
+        if not available:
+            raise HTTPException(status_code=404, detail=f"Nenhuma atração encontrada para {body.city}. Tente novamente.")
+
+        # Smart geographic selection: nearest-neighbor from centroid
+        if len(available) > 1:
+            center_lat = statistics.mean(a["latitude"] for a in available)
+            center_lon = statistics.mean(a["longitude"] for a in available)
+            pool = list(available)
+            selected: list = []
+            cur_lat, cur_lon = center_lat, center_lon
+            while pool and len(selected) < body.max_attractions:
+                nearest = min(pool, key=lambda a: (a["latitude"] - cur_lat) ** 2 + (a["longitude"] - cur_lon) ** 2)
+                selected.append(nearest)
+                pool.remove(nearest)
+                cur_lat, cur_lon = nearest["latitude"], nearest["longitude"]
+        else:
+            selected = available[: body.max_attractions]
+
+        # Current max order_in_day for target day
+        day_resp = supabase.table("itineraries").select("order_in_day").eq("trip_id", str(trip_id)).eq("day_number", body.day_number).execute()
+        max_order = max((item["order_in_day"] for item in (day_resp.data or [])), default=0)
+
+        # Insert each attraction into the itinerary
+        inserted = []
+        for i, attr in enumerate(selected):
+            item = {
+                "id": str(_uuid.uuid4()),
+                "trip_id": str(trip_id),
+                "attraction_id": attr["id"],
+                "day_number": body.day_number,
+                "order_in_day": max_order + i + 1,
+            }
+            resp = supabase.table("itineraries").insert(item).execute()
+            if resp.data:
+                inserted.append(resp.data[0])
+
+        return {"added": inserted, "attractions": selected}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
