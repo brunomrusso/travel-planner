@@ -74,9 +74,11 @@ const DAY_TRIPS: Record<string, DayTrip[]> = {
     { city: 'Sachsenhausen', distance_km: 35, how: 'Trem (1h)', highlights: ['Memorial do campo de concentração'], tip: 'Visita importante historicamente.' },
   ],
   prague: [
-    { city: 'Cesky Krumlov', distance_km: 175, how: 'Ônibus (2h45)', highlights: ['Castelo barroco', 'Rio Vltava', 'Centro histórico UNESCO'] },
-    { city: 'Karlovy Vary', distance_km: 130, how: 'Ônibus (2h)', highlights: ['Spas termais', 'Colunas de termas', 'Festival de cinema'] },
-    { city: 'Kutna Hora', distance_km: 80, how: 'Trem (1h)', highlights: ['Ossário de Sedlec', 'Catedral de Santa Bárbara', 'Cidade prata medieval'] },
+    { city: 'Kutná Hora', distance_km: 80, how: 'Trem (1h)', highlights: ['Ossário de Sedlec', 'Catedral de Santa Bárbara', 'Cidade prata medieval'], tip: 'O ossário é impactante — reserve ao menos 2h.' },
+    { city: 'Český Krumlov', distance_km: 175, how: 'Ônibus (2h45)', highlights: ['Castelo barroco', 'Rio Vltava', 'Centro histórico UNESCO'], tip: 'Um dos lugares mais bonitos da Europa Central — vale a viagem.' },
+    { city: 'Karlovy Vary', distance_km: 130, how: 'Ônibus (2h)', highlights: ['Spas termais', 'Colunas de termas', 'Wafer Karlovy Vary', 'Festival de cinema'] },
+    { city: 'Plzeň', distance_km: 90, how: 'Trem (1h20)', highlights: ['Fábrica da Pilsner Urquell', 'Praça da República', 'Catedral de São Bartolomeu'], tip: 'Tour na cervejaria inclui degustação diretamente do barril de madeira.' },
+    { city: 'Dresden', distance_km: 155, how: 'Ônibus ou trem (2h15)', highlights: ['Frauenkirche', 'Zwinger Palace', 'Semperoper', 'Galeria de Arte Velha'], tip: 'Cidade reconstruída depois da guerra — arquitetura barroca impressionante.' },
   ],
   lisbon: [
     { city: 'Sintra', distance_km: 30, how: 'Trem (40 min)', highlights: ['Palácio da Pena', 'Castelo dos Mouros', 'Quinta da Regaleira'], tip: 'Vá cedo — superlota em jul/ago.' },
@@ -121,11 +123,30 @@ const DAY_TRIPS: Record<string, DayTrip[]> = {
   ],
 };
 
+const CITY_ALIASES: Record<string, string> = {
+  'praga': 'prague',
+  'roma': 'rome',
+  'londres': 'london',
+  'toquio': 'tokyo',
+  'istambul': 'istanbul',
+  'singapura': 'singapore',
+  'berlim': 'berlin',
+  'lisboa': 'lisbon',
+  'amsterda': 'amsterdam',
+  'amsterdam': 'amsterdam',
+  'viena': 'vienna',
+};
+
 function getDayTrips(cities: string[]): { mainCity: string; trips: DayTrip[] } | null {
   for (const city of cities) {
     const cl = city.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ').trim();
+    // Check Portuguese→English alias first
+    const aliasKey = CITY_ALIASES[cl];
+    if (aliasKey && DAY_TRIPS[aliasKey])
+      return { mainCity: city, trips: DAY_TRIPS[aliasKey] };
+    // Fuzzy substring match against DAY_TRIPS keys
     for (const key of Object.keys(DAY_TRIPS)) {
       const kn = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (cl.includes(kn) || kn.includes(cl))
