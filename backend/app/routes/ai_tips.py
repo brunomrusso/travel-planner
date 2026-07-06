@@ -19,22 +19,24 @@ def _build_prompt(city: str, profile: str, days_map: dict) -> str:
         for day, names in sorted(days_map.items())
     )
     num_days = len(days_map)
+    day_numbers = sorted(days_map.keys())
+    days_example = ", ".join(
+        f'{{"day": {d}, "theme": "...", "tip": "...", "food": "..."}}'
+        for d in day_numbers
+    )
     return f"""Você é um guia de viagens especialista. Gere dicas práticas e culturais para uma viagem de {num_days} dia(s) em {city}, para um viajante com perfil: {profile}.
 
 Roteiro previsto:
 {days_text}
 
+IMPORTANTE: O array "days" deve conter EXATAMENTE {num_days} objeto(s), um para cada dia listado acima.
+Use EXATAMENTE os números de dia do roteiro ({', '.join(str(d) for d in day_numbers)}) — não renumere.
+Não inclua dias que estejam marcados como 'Livre' (sem atrações).
+
 Retorne APENAS um JSON válido (sem markdown, sem texto extra) com esta estrutura exata:
 {{
   "overview": "2 frases apresentando {city} para este perfil",
-  "days": [
-    {{
-      "day": 1,
-      "theme": "tema do dia em até 4 palavras",
-      "tip": "dica prática específica para este dia (1 frase)",
-      "food": "sugestão gastronômica local para este dia (1 frase)"
-    }}
-  ]
+  "days": [{days_example}]
 }}"""
 
 
@@ -105,6 +107,16 @@ async def get_trip_tips(trip_id: str, user_id: str = Depends(get_user_id_from_to
         start = content.find("{")
         end = content.rfind("}") + 1
         tips = json.loads(content[start:end])
+
+        # Safety re-map: AI often renumbers days 1..N instead of using actual day numbers.
+        # Sort AI days by their returned order and assign actual day numbers sequentially.
+        actual_days = sorted(days_map.keys())
+        ai_days = sorted(tips.get("days", []), key=lambda d: d.get("day", 0))
+        for i, ai_day in enumerate(ai_days):
+            if i < len(actual_days):
+                ai_day["day"] = actual_days[i]
+        tips["days"] = ai_days
+
         return {"tips": tips}
 
     except Exception as exc:

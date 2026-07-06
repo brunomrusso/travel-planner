@@ -854,7 +854,7 @@ export default function TripDetailPage() {
                     </div>
                   </div>
 
-                  {tips?.days && (() => {
+                  {tips?.days && dayItems.length > 0 && (() => {
                     const dt = tips.days!.find(d => d.day === dayIndex + 1);
                     if (!dt) return null;
                     return (
