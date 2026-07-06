@@ -17,6 +17,8 @@ const TRAVELER_PROFILES = [
 
 interface CityOption {
   display_name: string;
+  lat?: string;
+  lon?: string;
   address?: { country?: string; city?: string; town?: string; village?: string; country_code?: string };
 }
 
@@ -30,11 +32,84 @@ interface DestEntry {
   showSuggestions: boolean;
   isSearching: boolean;
   days: number;
+  lat?: number;
+  lon?: number;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function totalRouteKm(dests: DestEntry[]): number {
+  let d = 0;
+  for (let i = 0; i < dests.length - 1; i++) {
+    if (dests[i].lat && dests[i + 1].lat)
+      d += haversineKm(dests[i].lat!, dests[i].lon!, dests[i + 1].lat!, dests[i + 1].lon!);
+  }
+  return d;
+}
+
+function nearestNeighborCities(dests: DestEntry[]): DestEntry[] {
+  if (dests.length < 3) return dests;
+  const result = [dests[0]];
+  const pool = [...dests.slice(1)];
+  while (pool.length > 0) {
+    const last = result[result.length - 1];
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const d = last.lat && pool[i].lat ? haversineKm(last.lat!, last.lon!, pool[i].lat!, pool[i].lon!) : Infinity;
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    result.push(pool.splice(bestIdx, 1)[0]);
+  }
+  return result;
+}
+
+const SEASONAL_ALERTS: Array<{ keys: string[]; months: number[]; level: 'warn' | 'info'; msg: string }> = [
+  { keys: ['veneza', 'venice'], months: [7, 8], level: 'warn', msg: 'Veneza em jul/ago: superlotada. Considere abr ou out.' },
+  { keys: ['barcelona'], months: [7, 8], level: 'warn', msg: 'Barcelona no verão: praias lotadas e filas enormes nas atrações.' },
+  { keys: ['roma', 'rome'], months: [7, 8], level: 'warn', msg: 'Roma em jul/ago: calor extremo (40°C+) e superlotação.' },
+  { keys: ['paris'], months: [7, 8], level: 'info', msg: 'Alta temporada em Paris. Muitos locais fecham em agosto.' },
+  { keys: ['rio de janeiro', 'copacabana', 'rio'], months: [12, 1, 2], level: 'warn', msg: 'Rio no Réveillon/Carnaval: preços altíssimos e superlotação.' },
+  { keys: ['dubai'], months: [6, 7, 8, 9], level: 'warn', msg: 'Dubai no verão: temperatura acima de 45°C. Prefira nov–abr.' },
+  { keys: ['tóquio', 'tokyo', 'kyoto'], months: [3, 4], level: 'info', msg: 'Temporada de cerejeiras (mar/abr): muito popular, reserve hotel com antecedência.' },
+  { keys: ['bali'], months: [7, 8], level: 'info', msg: 'Alta temporada em Bali. Prefira mai/jun ou set.' },
+  { keys: ['amsterdam'], months: [4, 5], level: 'info', msg: 'Florada das tulipas (abr/mai): muito procurado, hotéis esgotam rápido.' },
+  { keys: ['new york', 'nova york', 'nova iorque'], months: [11, 12], level: 'info', msg: 'Natal em NYC: linda mas lotada e cara.' },
+  { keys: ['machu picchu'], months: [6, 7, 8], level: 'info', msg: 'Temporada seca: melhor clima mas ingressos esgotam semanas antes.' },
+  { keys: ['santorini', 'mykonos'], months: [7, 8], level: 'warn', msg: 'Ilhas gregas no verão: superlotadas, preços triplicados.' },
+  { keys: ['madrid'], months: [8], level: 'info', msg: 'Madrid em agosto: calor extremo e vários locais fechados.' },
+  { keys: ['praga', 'prague'], months: [7, 8], level: 'info', msg: 'Praga no verão: muito turística, visite cedo pela manhã para evitar multidões.' },
+];
+
+function getSeasonalAlerts(cities: string[], start: string, end: string) {
+  if (!start || !end) return [];
+  const months = new Set<number>();
+  const d1 = new Date(start + 'T12:00:00');
+  const d2 = new Date(end + 'T12:00:00');
+  let cur = new Date(d1);
+  while (cur <= d2) { months.add(cur.getMonth() + 1); cur.setDate(cur.getDate() + 30); }
+  months.add(d2.getMonth() + 1);
+  const found: Array<{ level: 'warn' | 'info'; msg: string }> = [];
+  for (const city of cities) {
+    const cl = city.toLowerCase();
+    for (const a of SEASONAL_ALERTS) {
+      if (a.keys.some(k => cl.includes(k)) && a.months.some(m => months.has(m)))
+        found.push({ level: a.level, msg: a.msg });
+    }
+  }
+  return found;
 }
 
 const emptyDest = (): DestEntry => ({
   city: '', country: '', country_code: '', query: '',
   valid: null, suggestions: [], showSuggestions: false, isSearching: false, days: 1,
+  lat: undefined, lon: undefined,
 });
 
 
@@ -45,6 +120,7 @@ export default function NewTripPage() {
   const [profiles, setProfiles] = useState<string[]>(['cultural']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cityOrderSuggestion, setCityOrderSuggestion] = useState<{ order: DestEntry[]; savings: number } | null>(null);
   const debounceRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -110,8 +186,10 @@ export default function NewTripPage() {
     const name = city.address?.city || city.address?.town || city.address?.village || city.display_name.split(',')[0];
     const country = city.address?.country || '';
     const country_code = city.address?.country_code || '';
+    const lat = city.lat ? parseFloat(city.lat) : undefined;
+    const lon = city.lon ? parseFloat(city.lon) : undefined;
     setDestinations(prev => prev.map((d, i) => i === idx
-      ? { ...d, city: name, country, country_code, query: name, valid: true, suggestions: [], showSuggestions: false }
+      ? { ...d, city: name, country, country_code, query: name, valid: true, suggestions: [], showSuggestions: false, lat, lon }
       : d
     ));
   };
@@ -186,6 +264,26 @@ export default function NewTripPage() {
       setIsLoading(false);
     }
   };
+
+  // City order optimization
+  useEffect(() => {
+    const valid = destinations.filter(d => d.valid && d.lat && d.lon);
+    if (valid.length < 3) { setCityOrderSuggestion(null); return; }
+    const optimized = nearestNeighborCities(valid);
+    const isSame = optimized.every((d, i) => d.city === valid[i].city);
+    if (isSame) { setCityOrderSuggestion(null); return; }
+    const currentKm = totalRouteKm(valid);
+    const optimizedKm = totalRouteKm(optimized);
+    const savings = Math.round(currentKm - optimizedKm);
+    if (savings > 50) setCityOrderSuggestion({ order: optimized, savings });
+    else setCityOrderSuggestion(null);
+  }, [destinations.map(d => d.city).join(',')]);
+
+  const seasonalAlerts = getSeasonalAlerts(
+    destinations.filter(d => d.valid).map(d => d.city),
+    formData.start_date,
+    formData.end_date
+  );
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -291,6 +389,35 @@ export default function NewTripPage() {
               ))}
             </div>
 
+            {cityOrderSuggestion && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">🗺️</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-800 text-sm">Rota otimizada disponível</p>
+                  <p className="text-amber-700 text-sm mt-0.5">
+                    {cityOrderSuggestion.order.map(d => d.city).join(' → ')}
+                    <span className="font-bold"> (economiza ~{cityOrderSuggestion.savings}km)</span>
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button type="button" onClick={() => {
+                      const optimized = cityOrderSuggestion.order.map(d => {
+                        const orig = destinations.find(o => o.city === d.city);
+                        return orig ? { ...d, days: orig.days } : d;
+                      });
+                      const rest = destinations.filter(d => !d.valid || !d.lat);
+                      setDestinations(tripDays > 0 ? distributeDaysEvenly([...optimized, ...rest], tripDays) : [...optimized, ...rest]);
+                      setCityOrderSuggestion(null);
+                    }} className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-full hover:bg-amber-700 font-semibold transition">
+                      ✓ Aplicar
+                    </button>
+                    <button type="button" onClick={() => setCityOrderSuggestion(null)} className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1">
+                      Manter original
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {destinations.length > 1 && tripDays > 0 && (
               <div className="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dias por cidade</p>
@@ -317,6 +444,19 @@ export default function NewTripPage() {
               </div>
             )}
           </div>
+
+          {seasonalAlerts.length > 0 && (
+            <div className="space-y-2">
+              {seasonalAlerts.map((a, i) => (
+                <div key={i} className={`flex items-start gap-2 px-4 py-3 rounded-xl text-sm ${
+                  a.level === 'warn' ? 'bg-orange-50 border border-orange-200 text-orange-800' : 'bg-blue-50 border border-blue-200 text-blue-800'
+                }`}>
+                  <span className="flex-shrink-0">{a.level === 'warn' ? '⚠️' : 'ℹ️'}</span>
+                  <span>{a.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Datas */}
           <div className="grid md:grid-cols-2 gap-4">

@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import AttractionModal from '@/components/AttractionModal';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -17,6 +17,35 @@ const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
 });
 
 const OUTDOOR_CATEGORIES = new Set(['park', 'beach', 'hiking', 'zoo', 'market', 'monument']);
+
+const SEASONAL_DATA: Array<{ keys: string[]; months: number[]; warn: boolean; msg: string }> = [
+  { keys: ['veneza', 'venice'], months: [7, 8], warn: true, msg: 'Veneza em jul/ago: superlotada. Visite cedo pela manhã.' },
+  { keys: ['barcelona'], months: [7, 8], warn: true, msg: 'Barcelona no verão: praias lotadas e filas enormes.' },
+  { keys: ['roma', 'rome'], months: [7, 8], warn: true, msg: 'Roma em jul/ago: calor extremo (40°C+) e superlotação.' },
+  { keys: ['paris'], months: [7, 8], warn: false, msg: 'Alta temporada em Paris. Muitos locais fecham em agosto.' },
+  { keys: ['rio de janeiro', 'rio'], months: [12, 1, 2], warn: true, msg: 'Rio no Réveillon/Carnaval: preços altíssimos e superlotação.' },
+  { keys: ['dubai'], months: [6, 7, 8, 9], warn: true, msg: 'Dubai no verão: temperatura acima de 45°C. Prefira nov–abr.' },
+  { keys: ['tóquio', 'tokyo', 'kyoto'], months: [3, 4], warn: false, msg: 'Temporada de cerejeiras (mar/abr): reserve hotel com antecedência.' },
+  { keys: ['bali'], months: [7, 8], warn: false, msg: 'Alta temporada em Bali. Prefira mai/jun ou set.' },
+  { keys: ['santorini', 'mykonos'], months: [7, 8], warn: true, msg: 'Ilhas gregas no verão: superlotadas, preços triplicados.' },
+  { keys: ['praga', 'prague'], months: [7, 8], warn: false, msg: 'Praga no verão: visite pontos principais bem cedo pela manhã.' },
+  { keys: ['machu picchu'], months: [6, 7, 8], warn: false, msg: 'Temporada seca: melhor clima mas ingressos esgotam semanas antes.' },
+];
+
+function checkSeasonality(cities: string[], start: string, end: string) {
+  if (!start || !end) return [];
+  const months = new Set<number>();
+  let d = new Date(start + 'T12:00:00');
+  const fin = new Date(end + 'T12:00:00');
+  while (d <= fin) { months.add(d.getMonth() + 1); d.setDate(d.getDate() + 28); }
+  months.add(fin.getMonth() + 1);
+  const out: Array<{ warn: boolean; msg: string }> = [];
+  for (const city of cities)
+    for (const a of SEASONAL_DATA)
+      if (a.keys.some(k => city.toLowerCase().includes(k)) && a.months.some(m => months.has(m)))
+        out.push({ warn: a.warn, msg: a.msg });
+  return out;
+}
 
 const CATEGORY_ICONS: Record<string, string> = {
   restaurant: '🍽️', museum: '🏛️', park: '🌿', historic: '🏰',
@@ -140,6 +169,9 @@ export default function TripDetailPage() {
   const [attrSearch, setAttrSearch] = useState('');
   const [copied, setCopied] = useState(false);
   const [token, setToken] = useState('');
+  const [showPackingList, setShowPackingList] = useState(false);
+  const [packingChecked, setPackingChecked] = useState<Set<string>>(new Set());
+  const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadTripData = async () => {
@@ -305,6 +337,39 @@ export default function TripDetailPage() {
       try { localStorage.setItem(`visited_${tripId}`, JSON.stringify(Array.from(next))); } catch {}
       return next;
     });
+  };
+
+  const generatePackingList = () => {
+    const cats = new Set(
+      itinerary.map(i => attractions.find(a => a.id === i.attraction_id)?.category).filter(Boolean) as string[]
+    );
+    const wVals = Object.values(weatherByDate);
+    const hasRain = wVals.some(w => w.is_rainy);
+    const hasCold = wVals.some(w => typeof w.minC === 'number' && (w.minC as number) < 12);
+    const hasHot = wVals.some(w => typeof w.maxC === 'number' && (w.maxC as number) > 28);
+    const profs = (trip?.traveler_profile || '').split(',');
+    return [
+      { cat: '📋 Documentos', items: ['Passaporte / RG', 'Passagens / e-tickets', 'Seguro viagem', 'Cartão de crédito/débito', 'Dinheiro local em espécie'] },
+      { cat: '📱 Tecnologia', items: ['Carregador do celular', 'Adaptador de tomada', 'Power bank', 'Fone de ouvido'] },
+      { cat: '💊 Saúde & Higiene', items: ['Remédios pessoais', 'Protetor solar FPS 50+', 'Repelente', 'Band-aid / kit básico'] },
+      { cat: '👗 Roupas', items: ['Roupa íntima (1 por dia)', 'Camisetas', 'Calça / bermuda', ...(hasCold ? ['Casaco / jaqueta', 'Cachecol'] : []), ...(hasHot ? ['Roupas leves de linho'] : []), ...(cats.has('beach') ? ['Biquíni / sunga', 'Canga'] : [])] },
+      ...(cats.has('beach') ? [{ cat: '🏖️ Praia', items: ['Óculos de sol', 'Chapéu / boné', 'Chinelo', 'Bolsa impermeável'] }] : []),
+      ...(cats.has('hiking') || cats.has('park') ? [{ cat: '🥾 Trilha / Outdoor', items: ['Tênis de caminhada', 'Mochila pequena', 'Garrafinha de água', 'Snacks energéticos'] }] : []),
+      ...(hasRain ? [{ cat: '🌧️ Para a chuva', items: ['Guarda-chuva compacto', 'Capa de chuva', 'Sapato impermeável'] }] : []),
+      ...(profs.includes('adventure') ? [{ cat: '🧗 Aventura', items: ['Kit primeiros socorros', 'Lanterna / headlamp', 'Mapa offline (baixar antes)'] }] : []),
+      ...(profs.includes('cultural') ? [{ cat: '🎨 Cultural', items: ['Câmera fotográfica', 'Caderninho de anotações', 'App de museu offline'] }] : []),
+      ...(profs.includes('gastronomic') || cats.has('restaurant') ? [{ cat: '🍽️ Gastronomia', items: ['App de tradução de cardápio', 'Lista de restaurantes salvos offline'] }] : []),
+    ];
+  };
+
+  const hiddenGemsFor = (attr: Attraction): Attraction[] => {
+    const inItin = new Set(itinerary.map(i => i.attraction_id));
+    return attractions
+      .filter(a => !inItin.has(a.id) && a.id !== attr.id)
+      .map(a => ({ ...a, _dist: haversineKm(attr.latitude, attr.longitude, a.latitude, a.longitude) }))
+      .filter((a: any) => a._dist < 0.4)
+      .sort((a: any, b: any) => a._dist - b._dist)
+      .slice(0, 2);
   };
 
   const moveToDay = (item: ItineraryItem, newDay: number) => {
@@ -510,12 +575,41 @@ export default function TripDetailPage() {
           </div>
         )}
 
+        {/* Alerta de sazonalidade */}
+        {trip && (() => {
+          const alerts = checkSeasonality(
+            (trip.destinations || [{ city: trip.destination_city }]).map(d => d.city),
+            trip.start_date,
+            trip.end_date
+          );
+          if (!alerts.length) return null;
+          return (
+            <div className="space-y-2 mb-6 print:hidden">
+              {alerts.map((a, i) => (
+                <div key={i} className={`flex items-start gap-2 px-4 py-3 rounded-xl text-sm ${
+                  a.warn ? 'bg-orange-50 border border-orange-200 text-orange-800' : 'bg-blue-50 border border-blue-200 text-blue-800'
+                }`}>
+                  <span className="flex-shrink-0">{a.warn ? '⚠️' : 'ℹ️'}</span>
+                  <span>{a.msg}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
               <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
               <div className="flex gap-2">
+                <button
+                  onClick={() => { setPackingChecked(new Set()); setShowPackingList(true); }}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Lista de bagagem"
+                >
+                  <Package size={14} className="inline mr-1" /> Bagagem
+                </button>
                 <button
                   onClick={() => window.print()}
                   className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
@@ -761,12 +855,54 @@ export default function TripDetailPage() {
                                     <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                                       ⏱ {durationStr}
                                     </span>
+                                    {attraction && (
+                                      <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${attraction.latitude},${attraction.longitude}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        title="Abrir no Google Maps"
+                                        className="print:hidden text-gray-300 hover:text-blue-500 transition flex-shrink-0"
+                                      >
+                                        <MapPin size={16} />
+                                      </a>
+                                    )}
                                     <Info size={16} className="print:hidden text-gray-300 group-hover:text-brand-teal transition flex-shrink-0" />
                                   </div>
                                 </button>
                               </div>
                             )}
                             {!isReordering && travelConnector}
+                            {!isReordering && attraction && (() => {
+                              const gems = hiddenGemsFor(attraction);
+                              if (!gems.length) return null;
+                              const key = item.id;
+                              const open = expandedGems.has(key);
+                              return (
+                                <div className="ml-[52px] mr-4 mb-2">
+                                  <button
+                                    onClick={() => setExpandedGems(prev => { const n = new Set(prev); open ? n.delete(key) : n.add(key); return n; })}
+                                    className="text-xs text-brand-teal hover:text-brand-teal-dark font-medium flex items-center gap-1"
+                                  >
+                                    🔍 {gems.length} descoberta{gems.length > 1 ? 's' : ''} próxima{gems.length > 1 ? 's' : ''} {open ? '▲' : '▼'}
+                                  </button>
+                                  {open && (
+                                    <div className="mt-1.5 space-y-1">
+                                      {gems.map((g: any) => (
+                                        <div key={g.id} className="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                                          <span className="text-lg">{CATEGORY_ICONS[g.category] || '📍'}</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-800 truncate">{g.name}</p>
+                                            <p className="text-xs text-gray-400">{CATEGORY_PT[g.category] || g.category} • {(g._dist * 1000).toFixed(0)}m</p>
+                                          </div>
+                                          <a href={`https://www.google.com/maps/search/?api=1&query=${g.latitude},${g.longitude}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500"><MapPin size={14} /></a>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })
@@ -848,6 +984,47 @@ export default function TripDetailPage() {
               {availableAttractions.filter(a => !attrSearch || a.name.toLowerCase().includes(attrSearch.toLowerCase())).length === 0 && (
                 <p className="text-gray-400 text-sm text-center py-8">Nenhuma atração disponível.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPackingList && (
+        <div className="fixed inset-0 z-[9998] flex items-end sm:items-center justify-center" onClick={() => setShowPackingList(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><Package size={18} /> Lista de Bagagem</h3>
+              <button onClick={() => setShowPackingList(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500">✕</button>
+            </div>
+            <p className="text-xs text-gray-400 px-5 pt-3">Gerada com base no roteiro, clima e perfil da viagem.</p>
+            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4">
+              {generatePackingList().map(section => (
+                <div key={section.cat}>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{section.cat}</p>
+                  <div className="space-y-1">
+                    {section.items.map(item => {
+                      const id = `${section.cat}::${item}`;
+                      const checked = packingChecked.has(id);
+                      return (
+                        <button key={id} onClick={() => setPackingChecked(prev => { const n = new Set(prev); checked ? n.delete(id) : n.add(id); return n; })}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition ${
+                            checked ? 'bg-green-50 text-gray-400 line-through' : 'hover:bg-gray-50 text-gray-800'
+                          }`}>
+                          <span className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center text-xs font-bold transition ${
+                            checked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'
+                          }`}>{checked ? '✓' : ''}</span>
+                          <span className="text-sm">{item}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between">
+              <span className="text-xs text-gray-400">{packingChecked.size} itens marcados</span>
+              <button onClick={() => setPackingChecked(new Set())} className="text-xs text-gray-400 hover:text-red-500">Limpar</button>
             </div>
           </div>
         </div>
