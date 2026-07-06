@@ -100,49 +100,118 @@ class ItineraryOptimizer:
         
         return sorted(scored, key=lambda x: x["score"], reverse=True)
     
+    def _kmeans_init(self, coords: List[tuple], k: int) -> List[tuple]:
+        """Farthest-first deterministic seeding: each new centroid is the point
+        furthest from all already-chosen centroids. Guarantees spread across the city."""
+        if not coords or k <= 0:
+            return []
+        centroids = [coords[0]]
+        coord_set = list(coords)  # keep order
+        while len(centroids) < k:
+            farthest = max(
+                (c for c in coord_set if c not in centroids),
+                key=lambda c: min(self._distance(c, ct) for ct in centroids),
+                default=None,
+            )
+            if farthest is None:
+                break
+            centroids.append(farthest)
+        return centroids
+
     def _distribute_attractions_by_day(self, attractions: List[Dict[str, Any]], num_days: int) -> List[Dict[str, Any]]:
+        """Cluster attractions geographically with K-Means so that nearby places
+        land on the same day. Falls back gracefully for tiny pools."""
         if not attractions or num_days <= 0:
             return []
 
         TARGET_MINUTES = 6 * 60   # 6 h of activities per day
-        MIN_PER_DAY = 3
         MAX_PER_DAY = 7
 
-        day_minutes: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
-        day_counts: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
-        itinerary: List[Dict[str, Any]] = []
+        pool = attractions[:MAX_PER_DAY * num_days]
+        n = len(pool)
+        k = min(num_days, n)
 
-        def _add(attraction: Dict, day: int):
-            day_counts[day] += 1
-            day_minutes[day] += attraction.get("visit_duration_minutes", 60)
+        coords = [(a["latitude"], a["longitude"]) for a in pool]
+
+        # --- Geographic K-Means ---
+        centroids = self._kmeans_init(coords, k)
+        assignments = [0] * n
+
+        for _ in range(30):  # iterate until stable
+            changed = False
+            for idx, coord in enumerate(coords):
+                nearest = min(range(k), key=lambda c: self._distance(coord, centroids[c]))
+                if assignments[idx] != nearest:
+                    assignments[idx] = nearest
+                    changed = True
+            # Recompute centroids
+            for c in range(k):
+                cluster_coords = [coords[i] for i in range(n) if assignments[i] == c]
+                if cluster_coords:
+                    centroids[c] = (
+                        sum(lat for lat, _ in cluster_coords) / len(cluster_coords),
+                        sum(lon for _, lon in cluster_coords) / len(cluster_coords),
+                    )
+            if not changed:
+                break
+
+        # --- Map clusters → days (highest avg score cluster = day 1) ---
+        clusters: Dict[int, List[int]] = {c: [] for c in range(k)}
+        for idx, c in enumerate(assignments):
+            clusters[c].append(idx)
+
+        cluster_scores = {
+            c: sum(pool[i].get("score", 1) for i in idxs) / max(len(idxs), 1)
+            for c, idxs in clusters.items()
+        }
+        sorted_clusters = sorted(clusters.keys(), key=lambda c: cluster_scores[c], reverse=True)
+        cluster_to_day = {c: day + 1 for day, c in enumerate(sorted_clusters)}
+
+        # --- Build itinerary with per-day time cap ---
+        days_minutes: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
+        days_counts: Dict[int, int] = {d: 0 for d in range(1, num_days + 1)}
+        itinerary: List[Dict[str, Any]] = []
+        overflow: List[Dict[str, Any]] = []
+
+        for c in sorted_clusters:
+            day = cluster_to_day[c]
+            # Within each geographic cluster sort by score descending
+            sorted_idxs = sorted(clusters[c], key=lambda i: pool[i].get("score", 1), reverse=True)
+            for attr_i in sorted_idxs:
+                attr = pool[attr_i]
+                duration = attr.get("visit_duration_minutes", 60)
+                if days_minutes[day] + duration <= TARGET_MINUTES and days_counts[day] < MAX_PER_DAY:
+                    days_counts[day] += 1
+                    days_minutes[day] += duration
+                    itinerary.append({
+                        "day_number": day,
+                        "order_in_day": days_counts[day],
+                        "attraction": attr,
+                        "start_time": None,
+                        "notes": "",
+                    })
+                else:
+                    overflow.append(attr)
+
+        # Place overflow into the least-full days that still have capacity
+        for attr in overflow:
+            duration = attr.get("visit_duration_minutes", 60)
+            eligible = [
+                d for d in range(1, num_days + 1)
+                if days_counts[d] < MAX_PER_DAY and days_minutes[d] + duration <= TARGET_MINUTES
+            ]
+            if not eligible:
+                break
+            target_day = min(eligible, key=lambda d: days_minutes[d])
+            days_counts[target_day] += 1
+            days_minutes[target_day] += duration
             itinerary.append({
-                "day_number": day,
-                "order_in_day": day_counts[day],
-                "attraction": attraction,
+                "day_number": target_day,
+                "order_in_day": days_counts[target_day],
+                "attraction": attr,
                 "start_time": None,
                 "notes": "",
             })
-
-        # Pass 1: round-robin to guarantee MIN_PER_DAY on every day
-        min_pool = attractions[:MIN_PER_DAY * num_days]
-        remainder = attractions[MIN_PER_DAY * num_days:]
-
-        for i, attr in enumerate(min_pool):
-            _add(attr, (i % num_days) + 1)
-
-        # Pass 2: fill remaining to reach TARGET_MINUTES, pick least-full day
-        for attr in remainder:
-            duration = attr.get("visit_duration_minutes", 60)
-            target_day = min(
-                (d for d in range(1, num_days + 1) if day_counts[d] < MAX_PER_DAY),
-                key=lambda d: day_minutes[d],
-                default=None,
-            )
-            if target_day is None:
-                break
-            if day_minutes[target_day] >= TARGET_MINUTES:
-                break
-            _add(attr, target_day)
 
         return itinerary
     
