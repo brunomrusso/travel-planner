@@ -285,22 +285,27 @@ async def enrich_city_attractions(supabase, city: str, min_needed: int) -> int:
     existing_resp = supabase.table("attractions").select("name").eq("city", city).execute()
     existing = existing_resp.data or []
     current_count = len(existing)
+    print(f"[enrich] city='{city}' existing={current_count} min_needed={min_needed}")
 
     if current_count >= min_needed:
         return current_count
 
     coords = await _geocode_city(city)
     if not coords:
+        print(f"[enrich] FAILED geocoding '{city}' — all candidates exhausted")
         return current_count
 
     lat, lon = coords
+    print(f"[enrich] geocoded '{city}' → ({lat:.4f}, {lon:.4f})")
     osm_pois = await _fetch_osm_pois(city, lat, lon)
+    print(f"[enrich] Overpass returned {len(osm_pois)} POIs for '{city}'")
 
     if not osm_pois:
         return current_count
 
     existing_names = {r["name"].lower() for r in existing}
     new_pois = [p for p in osm_pois if p["name"].lower() not in existing_names]
+    print(f"[enrich] {len(new_pois)} new POIs to insert for '{city}'")
 
     if not new_pois:
         return current_count
@@ -312,7 +317,8 @@ async def enrich_city_attractions(supabase, city: str, min_needed: int) -> int:
         try:
             supabase.table("attractions").insert(batch).execute()
             inserted += len(batch)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[enrich] INSERT ERROR for '{city}' batch {i}: {e}")
 
+    print(f"[enrich] inserted {inserted} attractions for '{city}', total={current_count + inserted}")
     return current_count + inserted

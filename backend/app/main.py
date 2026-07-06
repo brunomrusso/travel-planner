@@ -63,6 +63,18 @@ async def debug():
         "supabase_test": supabase_test,
     }
 
+@app.get("/debug-geocode")
+async def debug_geocode(city: str):
+    """Test geocoding for a city name — useful to diagnose PT city name issues."""
+    from app.services.attractions_fetcher import _build_geocode_candidates, _geocode_city
+    candidates = _build_geocode_candidates(city)
+    coords = await _geocode_city(city)
+    return {
+        "input": city,
+        "candidates_tried": candidates,
+        "result": {"lat": coords[0], "lon": coords[1]} if coords else None,
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
