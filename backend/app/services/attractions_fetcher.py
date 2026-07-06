@@ -3,6 +3,7 @@ Fetches tourist attractions from OpenStreetMap via Overpass API.
 Used to enrich sparse cities before itinerary generation.
 No API key required.
 """
+import asyncio
 import unicodedata
 import httpx
 from typing import List, Dict, Any, Optional, Tuple
@@ -241,7 +242,7 @@ out center;
     for mirror in OVERPASS_MIRRORS:
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(mirror, data={"data": query}, timeout=50)
+                resp = await client.post(mirror, data={"data": query}, timeout=12)
                 if resp.status_code == 200:
                     data = resp.json()
                     print(f"[overpass] success via {mirror} for '{city}'")
@@ -249,12 +250,12 @@ out center;
                 else:
                     print(f"[overpass] {mirror} returned HTTP {resp.status_code}")
         except Exception as e:
-            print(f"[overpass] {mirror} failed: {e}")
+            print(f"[overpass] {mirror} failed: {type(e).__name__}")
             continue
 
     if data is None:
-        print(f"[overpass] ALL mirrors failed for '{city}'")
-        return []
+        print(f"[overpass] ALL mirrors failed — falling back to Nominatim for '{city}'")
+        return await _fetch_pois_nominatim_fallback(city, lat, lon)
 
     results: List[Dict[str, Any]] = []
     seen: set = set()
@@ -288,6 +289,64 @@ out center;
             "visit_duration_minutes": duration,
         })
 
+    return results
+
+
+async def _fetch_pois_nominatim_fallback(city: str, lat: float, lon: float) -> List[Dict[str, Any]]:
+    """Fallback POI fetcher via Nominatim keyword search — used when Overpass is unreachable.
+    Queries common tourist POI types near the city and filters by proximity."""
+    headers = {"User-Agent": "Roteiria/1.0 (travel-planner app)"}
+    search_city = _normalize_city_name(city)  # use English/local name for better results
+    searches = [
+        ("museum",              "museum",        120),
+        ("castle palace",       "historic",       90),
+        ("monument memorial",   "historic",       60),
+        ("cathedral church",    "historic",       75),
+        ("park garden",         "park",           90),
+        ("gallery art",         "gallery",        60),
+        ("zoo aquarium",        "zoo",           150),
+        ("theater opera",       "entertainment", 120),
+        ("viewpoint tower",     "historic",       75),
+        ("historic old town",   "historic",       90),
+    ]
+    results: List[Dict[str, Any]] = []
+    seen: set = set()
+
+    for term, category, duration in searches:
+        if len(results) >= 40:
+            break
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": f"{term} {search_city}", "format": "json", "limit": 5},
+                    headers=headers,
+                    timeout=10,
+                )
+                for item in resp.json():
+                    name = item.get("display_name", "").split(",")[0].strip()
+                    lat_p = float(item.get("lat", 0))
+                    lon_p = float(item.get("lon", 0))
+                    if not name or len(name) < 3 or name.lower() in seen:
+                        continue
+                    # Keep only POIs within ~25 km of city centre
+                    dist_deg = ((lat_p - lat) ** 2 + (lon_p - lon) ** 2) ** 0.5
+                    if dist_deg > 0.25:  # ~25 km
+                        continue
+                    seen.add(name.lower())
+                    results.append({
+                        "name": name,
+                        "category": category,
+                        "city": city,
+                        "latitude": lat_p,
+                        "longitude": lon_p,
+                        "visit_duration_minutes": duration,
+                    })
+        except Exception as e:
+            print(f"[nominatim-fallback] '{term}' failed: {e}")
+        await asyncio.sleep(1.1)  # Nominatim ToS: max 1 req/sec
+
+    print(f"[nominatim-fallback] found {len(results)} POIs for '{city}'")
     return results
 
 
