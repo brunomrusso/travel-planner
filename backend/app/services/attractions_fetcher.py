@@ -206,10 +206,17 @@ async def _geocode_city(city: str) -> Optional[Tuple[float, float]]:
     return None
 
 
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.fr/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+
+
 async def _fetch_osm_pois(city: str, lat: float, lon: float, radius_m: int = 15000) -> List[Dict[str, Any]]:
     """Query Overpass API for tourist POIs within radius of (lat, lon).
-    Includes node, way and relation so large landmarks (castles, bridges, parks)
-    stored as areas are captured. Uses 'out center' to get centroid coords for ways/relations."""
+    Tries multiple public Overpass mirrors in sequence until one responds."""
     tourism_tags = "attraction|museum|gallery|viewpoint|theme_park|zoo|aquarium|artwork|monument"
     historic_tags = "castle|monument|ruins|memorial|fort|fortification|palace|city_gate"
     leisure_tags = "park|garden|nature_reserve|botanical_garden"
@@ -230,15 +237,23 @@ async def _fetch_osm_pois(city: str, lat: float, lon: float, radius_m: int = 150
 );
 out center;
 """
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://overpass-api.de/api/interpreter",
-                data={"data": query},
-                timeout=50,
-            )
-            data = resp.json()
-    except Exception:
+    data = None
+    for mirror in OVERPASS_MIRRORS:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(mirror, data={"data": query}, timeout=50)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    print(f"[overpass] success via {mirror} for '{city}'")
+                    break
+                else:
+                    print(f"[overpass] {mirror} returned HTTP {resp.status_code}")
+        except Exception as e:
+            print(f"[overpass] {mirror} failed: {e}")
+            continue
+
+    if data is None:
+        print(f"[overpass] ALL mirrors failed for '{city}'")
         return []
 
     results: List[Dict[str, Any]] = []
