@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.models.trip import Trip, TripCreate, TripUpdate
 from app.database import get_supabase
 from app.services.itinerary_optimizer import ItineraryOptimizer
-from app.services.attractions_fetcher import enrich_city_attractions
+from app.services.attractions_fetcher import enrich_city_attractions, _geocode_city
 from app.services.weather_service import WeatherService
 from app.auth import get_user_id_from_token
 
@@ -16,6 +16,7 @@ class AddDayTripBody(BaseModel):
     city: str
     day_number: int
     max_attractions: int = 4
+    highlights: Optional[List[str]] = None  # used as fallback if OSM returns nothing
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -247,8 +248,38 @@ async def add_day_trip(trip_id: UUID, body: AddDayTripBody, user_id: str = Depen
         all_attrs = attrs_resp.data or []
         available = [a for a in all_attrs if a["id"] not in existing_ids]
 
+        # Fallback: if OSM returned nothing, synthesise attractions from the highlights list
+        if not available and body.highlights:
+            coords = await _geocode_city(body.city)
+            if coords:
+                base_lat, base_lon = coords
+                # Small offsets so each highlight gets a slightly different coordinate
+                offsets = [0.0, 0.004, -0.004, 0.008, -0.008, 0.006, -0.006]
+                synthesised = []
+                for idx, name in enumerate(body.highlights[: body.max_attractions]):
+                    offset = offsets[idx % len(offsets)]
+                    row = {
+                        "name": name,
+                        "category": "historic",
+                        "city": body.city,
+                        "latitude": base_lat + offset,
+                        "longitude": base_lon + offset,
+                        "visit_duration_minutes": 90,
+                        "rating": 4.5,
+                    }
+                    try:
+                        ins = supabase.table("attractions").insert(row).execute()
+                        if ins.data:
+                            synthesised.append(ins.data[0])
+                    except Exception:
+                        pass
+                available = synthesised
+
         if not available:
-            raise HTTPException(status_code=404, detail=f"Nenhuma atração encontrada para {body.city}. Tente novamente.")
+            raise HTTPException(
+                status_code=404,
+                detail=f"N\u00e3o foi poss\u00edvel encontrar atra\u00e7\u00f5es para {body.city}. Verifique o nome da cidade e tente novamente."
+            )
 
         # Smart geographic selection: nearest-neighbor from centroid
         if len(available) > 1:

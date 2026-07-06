@@ -524,7 +524,7 @@ export default function TripDetailPage() {
       const headers = { Authorization: `Bearer ${data!.session!.access_token}` };
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/add-day-trip`,
-        { city: dayTripModal.trip.city, day_number: dayTripDay, max_attractions: 4 },
+        { city: dayTripModal.trip.city, day_number: dayTripDay, max_attractions: 4, highlights: dayTripModal.trip.highlights },
         { headers, timeout: 30000 }
       );
       const newItems: ItineraryItem[] = res.data.added;
