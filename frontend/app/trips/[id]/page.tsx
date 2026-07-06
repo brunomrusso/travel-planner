@@ -367,7 +367,7 @@ export default function TripDetailPage() {
     return attractions
       .filter(a => !inItin.has(a.id) && a.id !== attr.id)
       .map(a => ({ ...a, _dist: haversineKm(attr.latitude, attr.longitude, a.latitude, a.longitude) }))
-      .filter((a: any) => a._dist < 0.4)
+      .filter((a: any) => a._dist < 0.7)
       .sort((a: any, b: any) => a._dist - b._dist)
       .slice(0, 2);
   };
