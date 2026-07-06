@@ -143,15 +143,53 @@ def _map_osm_tags(tags: dict) -> Tuple[str, int]:
     return "historic", 60
 
 
+def _build_geocode_candidates(city: str) -> List[str]:
+    """Build a list of candidate names to try when geocoding, from most to least specific.
+    Handles Portuguese city names like 'Frankfurt sobre o Meno', 'Nova Iorque', etc.
+    without relying on a hardcoded alias map."""
+    import re
+    candidates: List[str] = []
+
+    # 1. Alias map for known tricky cases
+    normalized = _normalize_city_name(city)
+    if normalized != city:
+        candidates.append(normalized)
+
+    # 2. Original name as typed
+    candidates.append(city)
+
+    # 3. Strip Portuguese preposition phrases:
+    #    "X sobre o/a Y" → "X"   (Frankfurt sobre o Meno → Frankfurt)
+    #    "X do/da/de Y"  → "X"   (Rio de Janeiro stays intact — handled by Nominatim)
+    stripped = re.sub(
+        r"\s+(sobre\s+[oa]s?|d[oae]\s+\w+)\s*.*$", "", city, flags=re.I
+    ).strip()
+    if stripped and stripped.lower() != city.lower() and len(stripped) > 2:
+        candidates.append(stripped)
+
+    # 4. First word only (last resort for multi-word names)
+    first_word = city.split()[0].strip() if city.split() else ""
+    if len(first_word) > 3 and first_word.lower() not in (c.lower() for c in candidates):
+        candidates.append(first_word)
+
+    # Deduplicate while preserving order
+    seen: set = set()
+    unique: List[str] = []
+    for c in candidates:
+        if c.lower() not in seen:
+            seen.add(c.lower())
+            unique.append(c)
+    return unique
+
+
 async def _geocode_city(city: str) -> Optional[Tuple[float, float]]:
     """Geocode a city name using Nominatim (OSM). Returns (lat, lon) or None.
-    Normalises Portuguese city names (e.g. 'Frankfurt sobre o Meno' → 'Frankfurt am Main')
-    before querying, with a fallback to the original name."""
+    Tries multiple candidate names automatically so Portuguese names like
+    'Frankfurt sobre o Meno' or 'Nova Iorque' resolve without manual mapping."""
     headers = {"User-Agent": "Roteiria/1.0 (travel-planner app)"}
-    normalized = _normalize_city_name(city)
-    names_to_try = [normalized] if normalized == city else [normalized, city]
+    candidates = _build_geocode_candidates(city)
 
-    for name in names_to_try:
+    for name in candidates:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
