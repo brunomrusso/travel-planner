@@ -3,8 +3,120 @@ Fetches tourist attractions from OpenStreetMap via Overpass API.
 Used to enrich sparse cities before itinerary generation.
 No API key required.
 """
+import unicodedata
 import httpx
 from typing import List, Dict, Any, Optional, Tuple
+
+# Portuguese (and common misspelling) → geocodable city name
+CITY_NAME_ALIASES: Dict[str, str] = {
+    # Germany
+    "frankfurt sobre o meno": "Frankfurt am Main",
+    "frankfurt sobre meno": "Frankfurt am Main",
+    "munique": "Munich",
+    "colonia": "Cologne",
+    "colônia": "Cologne",
+    "hamburgo": "Hamburg",
+    "berlim": "Berlin",
+    # Austria
+    "viena": "Vienna",
+    # UK
+    "londres": "London",
+    "edimburgo": "Edinburgh",
+    # Czech Republic
+    "praga": "Prague",
+    # Hungary
+    "budapeste": "Budapest",
+    # Poland
+    "varsovia": "Warsaw",
+    "varsóvia": "Warsaw",
+    "cracovia": "Krakow",
+    "cracóvia": "Krakow",
+    # Romania
+    "bucareste": "Bucharest",
+    # Serbia
+    "belgrado": "Belgrade",
+    # Greece
+    "atenas": "Athens",
+    # Denmark
+    "copenhague": "Copenhagen",
+    "copenhaga": "Copenhagen",
+    # Sweden
+    "estocolmo": "Stockholm",
+    # Finland
+    "helsinque": "Helsinki",
+    # Netherlands
+    "amsterda": "Amsterdam",
+    "amsterdã": "Amsterdam",
+    "haia": "The Hague",
+    # Belgium
+    "bruxelas": "Brussels",
+    # Switzerland
+    "zurique": "Zurich",
+    "genebra": "Geneva",
+    # Italy
+    "roma": "Rome",
+    "milao": "Milan",
+    "milão": "Milan",
+    "veneza": "Venice",
+    "florenca": "Florence",
+    "florença": "Florence",
+    "napoles": "Naples",
+    "nápoles": "Naples",
+    # Spain
+    "madri": "Madrid",
+    # Portugal
+    "lisboa": "Lisbon",
+    # Turkey
+    "istambul": "Istanbul",
+    "istambull": "Istanbul",
+    # Russia
+    "moscou": "Moscow",
+    "moscovo": "Moscow",
+    # Ukraine
+    "kiev": "Kyiv",
+    # Ireland
+    "dublim": "Dublin",
+    # Japan
+    "toquio": "Tokyo",
+    "tóquio": "Tokyo",
+    # China
+    "pequim": "Beijing",
+    "xangai": "Shanghai",
+    # South Korea
+    "seul": "Seoul",
+    # Singapore
+    "singapura": "Singapore",
+    # South Africa
+    "johanesburgo": "Johannesburg",
+    "johannesburgo": "Johannesburg",
+    # USA
+    "nova iorque": "New York",
+    "nova york": "New York",
+    "nova orleans": "New Orleans",
+    "sao francisco": "San Francisco",
+    "são francisco": "San Francisco",
+    "los angeles": "Los Angeles",
+    "washington dc": "Washington D.C.",
+    # Mexico
+    "cidade do mexico": "Mexico City",
+    "cidade do méxico": "Mexico City",
+    # Colombia
+    "bogota": "Bogotá",
+    # Egypt
+    "cairo": "Cairo",
+    "o cairo": "Cairo",
+}
+
+
+def _normalize_city_name(city: str) -> str:
+    """Return the geocodable English/local name for a Portuguese city name."""
+    key = city.strip().lower()
+    key_ascii = unicodedata.normalize("NFD", key).encode("ascii", "ignore").decode()
+    for alias_key, mapped in CITY_NAME_ALIASES.items():
+        alias_ascii = unicodedata.normalize("NFD", alias_key).encode("ascii", "ignore").decode()
+        if key_ascii == alias_ascii or key == alias_key:
+            return mapped
+    return city
 
 
 def _map_osm_tags(tags: dict) -> Tuple[str, int]:
@@ -32,21 +144,27 @@ def _map_osm_tags(tags: dict) -> Tuple[str, int]:
 
 
 async def _geocode_city(city: str) -> Optional[Tuple[float, float]]:
-    """Geocode a city name using Nominatim (OSM). Returns (lat, lon) or None."""
+    """Geocode a city name using Nominatim (OSM). Returns (lat, lon) or None.
+    Normalises Portuguese city names (e.g. 'Frankfurt sobre o Meno' → 'Frankfurt am Main')
+    before querying, with a fallback to the original name."""
     headers = {"User-Agent": "Roteiria/1.0 (travel-planner app)"}
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={"q": city, "format": "json", "limit": 1},
-                headers=headers,
-                timeout=10,
-            )
-            data = resp.json()
-            if data:
-                return float(data[0]["lat"]), float(data[0]["lon"])
-    except Exception:
-        pass
+    normalized = _normalize_city_name(city)
+    names_to_try = [normalized] if normalized == city else [normalized, city]
+
+    for name in names_to_try:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": name, "format": "json", "limit": 1},
+                    headers=headers,
+                    timeout=10,
+                )
+                data = resp.json()
+                if data:
+                    return float(data[0]["lat"]), float(data[0]["lon"])
+        except Exception:
+            pass
     return None
 
 
