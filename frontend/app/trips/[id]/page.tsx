@@ -12,6 +12,7 @@ import AttractionModal from '@/components/AttractionModal';
 import TripChat from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
@@ -305,6 +306,13 @@ export default function TripDetailPage() {
   const [addingDayTrip, setAddingDayTrip] = useState(false);
   const [dayTripMsg, setDayTripMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string }>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(`accommodation_${window.location.pathname.split('/').pop()}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
 
   useEffect(() => {
     const loadTripData = async () => {
@@ -368,6 +376,19 @@ export default function TripDetailPage() {
   const numDays = trip
     ? Math.ceil((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000) + 1
     : 0;
+
+  useEffect(() => {
+    if (!trip || itinerary.length === 0) return;
+    const start = new Date(trip.start_date + 'T12:00:00'); start.setHours(0, 0, 0, 0);
+    const end = new Date(trip.end_date + 'T12:00:00'); end.setHours(23, 59, 59, 0);
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    if (now >= start && now <= end) {
+      const dayNum = Math.floor((now.getTime() - start.getTime()) / 86400000) + 1;
+      setTimeout(() => {
+        document.getElementById(`day-${dayNum}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 600);
+    }
+  }, [trip, itinerary.length]);
 
   const persistReorder = async (updates: { id: string; day_number: number; order_in_day: number }[]) => {
     try {
@@ -447,6 +468,13 @@ export default function TripDetailPage() {
     }
     text += `🔗 ${window.location.origin}/shared/${tripId}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const updateAccommodation = (day: number, field: 'name' | 'address', value: string) => {
+    const current = dayAccommodation[day] || { name: '', address: '' };
+    const updated = { ...dayAccommodation, [day]: { ...current, [field]: value } };
+    setDayAccommodation(updated);
+    localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
   };
 
   const openAddModal = async (day: number) => {
@@ -657,6 +685,12 @@ export default function TripDetailPage() {
   const itineraryByDay = Array.from({ length: days }, (_, i) =>
     itinerary.filter(item => item.day_number === i + 1).sort((a, b) => a.order_in_day - b.order_in_day)
   );
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+  const tripStartMidnight = new Date(trip.start_date + 'T12:00:00'); tripStartMidnight.setHours(0, 0, 0, 0);
+  const tripEndMidnight = new Date(trip.end_date + 'T12:00:00'); tripEndMidnight.setHours(23, 59, 59, 0);
+  const isOngoing = todayMidnight >= tripStartMidnight && todayMidnight <= tripEndMidnight;
+  const currentDayNumber = isOngoing ? Math.floor((todayMidnight.getTime() - tripStartMidnight.getTime()) / 86400000) + 1 : null;
+  const progressPercent = (currentDayNumber && days > 0) ? Math.min(100, Math.round(((currentDayNumber - 0.5) / days) * 100)) : 0;
   const totalAttractions = itinerary.length;
   const startDateFmt = new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   const endDateFmt = new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -673,6 +707,7 @@ export default function TripDetailPage() {
           </Link>
         </div>
         <div className="absolute top-4 right-6 flex gap-2 print:hidden">
+          <ThemeToggle variant="icon" />
           <button onClick={() => setShowShareModal(true)} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-white/30 transition">
             <Share2 size={14} />
             <span className="hidden sm:inline">Compartilhar</span>
@@ -730,6 +765,29 @@ export default function TripDetailPage() {
               <p className="text-3xl font-bold text-gray-700">{Math.round(totalAttractions / days)}</p>
               <p className="text-gray-500 text-sm mt-1">Atrações por dia</p>
             </div>
+          </div>
+        )}
+
+        {/* Banner viagem em andamento */}
+        {isOngoing && currentDayNumber && (
+          <div className="bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl p-4 mb-6 text-white shadow-lg print:hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-white rounded-full animate-pulse flex-shrink-0" />
+                <span className="font-bold text-base">Viagem em andamento</span>
+              </div>
+              <span className="bg-white/25 px-3 py-0.5 rounded-full text-sm font-semibold">
+                Dia {currentDayNumber} de {days}
+              </span>
+            </div>
+            <div className="w-full bg-white/30 rounded-full h-2 mb-2">
+              <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+            </div>
+            <p className="text-sm opacity-90">
+              {days - currentDayNumber === 0
+                ? '🎉 Último dia! Aproveite ao máximo!'
+                : `✈️ ${days - currentDayNumber} dia${days - currentDayNumber > 1 ? 's' : ''} restante${days - currentDayNumber > 1 ? 's' : ''} — role para ver o dia atual destacado`}
+            </p>
           </div>
         )}
 
@@ -861,11 +919,14 @@ export default function TripDetailPage() {
                 .filter((p): p is { lat: number; lng: number; name: string; order: number } => p !== null);
 
               return (
-                <div key={dayIndex} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="bg-gradient-to-r from-brand-teal to-brand-teal-dark px-6 py-4 flex justify-between items-center">
+                <div key={dayIndex} id={`day-${dayIndex + 1}`} className={`bg-white rounded-xl shadow-sm overflow-hidden scroll-mt-4 ${currentDayNumber === dayIndex + 1 ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}>
+                  <div className={`px-6 py-4 flex justify-between items-center bg-gradient-to-r ${currentDayNumber === dayIndex + 1 ? 'from-green-500 to-teal-500' : 'from-brand-teal to-brand-teal-dark'}`}>
                     <div>
                       <h3 className="text-white font-bold text-lg flex items-center gap-2 flex-wrap">
                         <span className="whitespace-nowrap">Dia {dayIndex + 1}</span>
+                        {currentDayNumber === dayIndex + 1 && (
+                          <span className="bg-white/30 text-white text-xs font-bold px-2 py-0.5 rounded-full">HOJE</span>
+                        )}
                         {(() => {
                             const dk = dayDate.toISOString().split('T')[0];
                             const w = weatherByDate[dk];
@@ -903,6 +964,17 @@ export default function TripDetailPage() {
                       {dayDuration > 0 && <p className="text-white/80 text-sm">~{Math.round(dayDuration / 60)}h de atividades</p>}
                     </div>
                   </div>
+
+                  {/* Hospedagem (banner) */}
+                  {dayAccommodation[dayIndex + 1]?.name && (
+                    <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-b border-blue-100 text-sm text-blue-800">
+                      <span className="text-base flex-shrink-0">🏨</span>
+                      <span className="font-medium truncate">{dayAccommodation[dayIndex + 1].name}</span>
+                      {dayAccommodation[dayIndex + 1].address && (
+                        <span className="text-blue-500 text-xs truncate hidden sm:inline">· {dayAccommodation[dayIndex + 1].address}</span>
+                      )}
+                    </div>
+                  )}
 
                   {tips?.days && dayItems.length > 0 && (() => {
                     const dt = tips.days!.find(d => d.day === dayIndex + 1);
@@ -1124,9 +1196,33 @@ export default function TripDetailPage() {
                     </div>
                   )}
 
+                  {/* Hospedagem (input) */}
+                  <div className="print:hidden border-t border-gray-100 px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base flex-shrink-0">🏨</span>
+                      <input
+                        type="text"
+                        placeholder="Hotel / Airbnb desta noite (opcional)"
+                        value={dayAccommodation[dayIndex + 1]?.name || ''}
+                        onChange={e => updateAccommodation(dayIndex + 1, 'name', e.target.value)}
+                        className="flex-1 text-sm text-gray-600 placeholder-gray-300 bg-transparent outline-none"
+                      />
+                    </div>
+                    {dayAccommodation[dayIndex + 1]?.name && (
+                      <input
+                        type="text"
+                        placeholder="📍 Endereço (opcional)"
+                        value={dayAccommodation[dayIndex + 1]?.address || ''}
+                        onChange={e => updateAccommodation(dayIndex + 1, 'address', e.target.value)}
+                        className="mt-1 w-full text-xs text-gray-400 placeholder-gray-300 bg-transparent outline-none pl-6"
+                      />
+                    )}
+                  </div>
+
+                  {/* Notas do dia */}
                   <div className="print:hidden border-t border-gray-100 px-5 py-3">
                     <textarea
-                      placeholder="📝 Notas do dia (hospedagem, reservas, lembretes...)"
+                      placeholder="📝 Notas do dia (reservas, lembretes...)"
                       value={dayNotes[dayIndex + 1] || ''}
                       onChange={e => updateDayNote(dayIndex + 1, e.target.value)}
                       rows={dayNotes[dayIndex + 1] ? 3 : 1}

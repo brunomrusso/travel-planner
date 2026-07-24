@@ -43,6 +43,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Roteiria" />
         <link rel="apple-touch-icon" href="/apple-icon" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||(t==null&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}` }} />
       </head>
       <body>{children}</body>
     </html>

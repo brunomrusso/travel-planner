@@ -9,6 +9,7 @@ import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import { User, BookMarked, LogOut, CheckCircle, Trash2, Plane, Clock, Archive, Share2 } from 'lucide-react';
 import CurrencyConverter from '@/components/CurrencyConverter';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
@@ -230,6 +231,7 @@ export default function TripsPage() {
               <User size={18} />
               <span className="hidden sm:inline text-sm">Perfil</span>
             </Link>
+            <ThemeToggle />
             <CurrencyConverter variant="nav" />
             <button onClick={handleLogout} className="flex items-center gap-1.5 text-gray-500 hover:text-red-500 transition" title="Sair">
               <LogOut size={18} />
