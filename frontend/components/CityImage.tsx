@@ -35,19 +35,24 @@ async function fetchSummary(lang: string, title: string): Promise<Record<string,
   }
 }
 
-async function searchWikipediaCity(city: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(city + ' city municipality')}&limit=5&format=json&origin=*`
-    );
-    const [, titles] = await res.json() as [unknown, string[]];
-    for (const title of (titles || [])) {
-      if (/municipality|,\s|city in|town in/i.test(title)) return title;
-    }
-    return titles?.[0] || null;
-  } catch {
-    return null;
+async function searchCityImage(city: string): Promise<string | null> {
+  const queries = [`${city} municipality`, `${city} city`, city];
+  for (const q of queries) {
+    try {
+      const res = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=5&prop=pageimages|description&pithumbsize=1200&format=json&origin=*`
+      );
+      const data = await res.json() as Record<string, unknown>;
+      const pages = Object.values((data?.query as Record<string, unknown>)?.pages as Record<string, unknown> || {}) as Record<string, unknown>[];
+      for (const page of pages) {
+        const desc = ((page.description as string) || '').toLowerCase();
+        if (PERSON_SIGNALS.test(desc)) continue;
+        const thumb = (page.thumbnail as { source?: string } | undefined)?.source;
+        if (thumb && isPhotoUrl(thumb)) return thumb;
+      }
+    } catch { /* try next query */ }
   }
+  return null;
 }
 
 function extractPhoto(data: Record<string, unknown>): string | null {
@@ -81,14 +86,8 @@ async function fetchCityImage(city: string): Promise<string | null> {
   // Saint-named cities OR direct fetch failed:
   // Use Wikipedia search to find the specific municipality article
   // e.g. "São Roque" → finds "São Roque, São Paulo" which has a real city photo
-  const found = await searchWikipediaCity(city);
-  if (found) {
-    const d = await fetchSummary('en', found);
-    if (d && isUsableArticle(d)) {
-      const photo = extractPhoto(d);
-      if (photo) return photo;
-    }
-  }
+  const photo = await searchCityImage(city);
+  if (photo) return photo;
 
   // No usable city image — show gradient background
   return null;
