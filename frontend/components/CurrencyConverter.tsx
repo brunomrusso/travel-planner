@@ -69,6 +69,7 @@ export default function CurrencyConverter({ countryCode }: Props) {
   const [fromBRL, setFromBRL] = useState(true);
   const [rates, setRates] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState(
     (countryCode ? COUNTRY_CURRENCY[countryCode.toLowerCase()] : null) || POPULAR_CURRENCIES[0]
@@ -77,16 +78,20 @@ export default function CurrencyConverter({ countryCode }: Props) {
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    const targets = Array.from(new Set([selectedCurrency.code, ...POPULAR_CURRENCIES.map(c => c.code)])).filter(c => c !== 'BRL').join(',');
-    fetch(`https://api.frankfurter.app/latest?from=BRL&to=${targets}`)
+    setFetchError(false);
+    fetch('https://open.er-api.com/v6/latest/BRL')
       .then(r => r.json())
       .then(data => {
-        setRates(data.rates || {});
-        setLastUpdated(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        if (data.result === 'success' && data.rates) {
+          setRates(data.rates);
+          setLastUpdated(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        } else {
+          setFetchError(true);
+        }
       })
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
-  }, [open, selectedCurrency.code]);
+  }, [open]);
 
   const rate = rates[selectedCurrency.code] || 0;
   const numAmount = parseFloat(amount) || 0;
@@ -171,8 +176,13 @@ export default function CurrencyConverter({ countryCode }: Props) {
               </div>
             </div>
 
+            {/* Error state */}
+            {fetchError && (
+              <p className="text-xs text-red-500 text-center">Erro ao carregar câmbio. Verifique sua conexão.</p>
+            )}
+
             {/* Rate reference */}
-            {rate > 0 && !loading && (
+            {rate > 0 && !loading && !fetchError && (
               <p className="text-xs text-gray-400 text-center">
                 1 BRL = {selectedCurrency.symbol} {rate.toFixed(4)} {selectedCurrency.code}
                 {lastUpdated && ` · atualizado ${lastUpdated}`}
