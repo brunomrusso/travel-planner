@@ -12,25 +12,66 @@ function isPhotoUrl(url: string | undefined): boolean {
   return true;
 }
 
+const PERSON_SIGNALS = /\b(saint|são \w+ de |santa \w+ de |born \d|died \d|\d{3,4}[–\-]\d{3,4}|bishop|pope|apostle|martyr|feast day|patron saint|catholic|canonized|beatified|holy|friar|monk|nun|friar)\b/i;
+
+function isAboutPerson(data: Record<string, unknown>): boolean {
+  const desc = ((data.description as string) || '').toLowerCase();
+  const extract = ((data.extract as string) || '').slice(0, 400).toLowerCase();
+  if (PERSON_SIGNALS.test(desc)) return true;
+  if (/\b(saint|patron|holy|martyred|born in \d|died in \d)\b/.test(extract)) return true;
+  return false;
+}
+
+async function fetchSummary(lang: string, title: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(
+      `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function extractPhoto(data: Record<string, unknown>): string | null {
+  const original = (data?.originalimage as Record<string, string> | undefined)?.source;
+  const thumb = (data?.thumbnail as Record<string, string> | undefined)?.source;
+  if (isPhotoUrl(original)) return original!;
+  if (isPhotoUrl(thumb)) return thumb!;
+  return null;
+}
+
 async function fetchCityImage(city: string): Promise<string | null> {
-  const tryLang = async (lang: string): Promise<string | null> => {
-    try {
-      const res = await fetch(
-        `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(city)}`
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const original = data?.originalimage?.source;
-      const thumb = data?.thumbnail?.source;
-      if (isPhotoUrl(original)) return original;
-      if (isPhotoUrl(thumb)) return thumb;
-      return null;
-    } catch {
-      return null;
+  // 1. Try English Wikipedia
+  const en = await fetchSummary('en', city);
+  if (en && !isAboutPerson(en)) {
+    const photo = extractPhoto(en);
+    if (photo) return photo;
+  }
+
+  // 2. If English looks like a saint/person, try disambiguation variants
+  if (!en || isAboutPerson(en)) {
+    for (const variant of [`${city} (city)`, `${city} (município)`, `${city}, Brazil`, `${city}, Brasil`]) {
+      const d = await fetchSummary('en', variant) || await fetchSummary('pt', variant);
+      if (d && !isAboutPerson(d)) {
+        const photo = extractPhoto(d);
+        if (photo) return photo;
+      }
     }
-  };
-  // English Wikipedia tends to have better city panoramas as lead image
-  return (await tryLang('en')) || (await tryLang('pt'));
+  }
+
+  // 3. Try Portuguese Wikipedia directly
+  const pt = await fetchSummary('pt', city);
+  if (pt && !isAboutPerson(pt)) {
+    const photo = extractPhoto(pt);
+    if (photo) return photo;
+  }
+
+  // 4. Last resort — use whatever photo we have even if person page
+  if (en) { const p = extractPhoto(en); if (p) return p; }
+  if (pt) { const p = extractPhoto(pt); if (p) return p; }
+  return null;
 }
 
 interface CityImageProps {
