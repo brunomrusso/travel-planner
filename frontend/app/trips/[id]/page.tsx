@@ -707,7 +707,6 @@ export default function TripDetailPage() {
           </Link>
         </div>
         <div className="absolute top-4 right-6 flex gap-2 print:hidden">
-          <ThemeToggle variant="icon" />
           <button onClick={() => setShowShareModal(true)} className="bg-white/20 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 hover:bg-white/30 transition">
             <Share2 size={14} />
             <span className="hidden sm:inline">Compartilhar</span>
