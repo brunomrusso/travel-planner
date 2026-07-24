@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import AttractionModal from '@/components/AttractionModal';
+import TripChat from '@/components/TripChat';
 import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
@@ -1396,6 +1397,10 @@ export default function TripDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {token && trip && (
+        <TripChat tripId={tripId} city={trip.destination_city} token={token} />
       )}
 
       {selectedAttraction && (
