@@ -58,24 +58,31 @@ function extractPhoto(data: Record<string, unknown>): string | null {
   return null;
 }
 
+const SAINT_PREFIX = /^(são |santa |santo |san |sant'|sant |saint )/i;
+
 async function fetchCityImage(city: string): Promise<string | null> {
-  // 1. Direct fetch from English Wikipedia
-  const en = await fetchSummary('en', city);
-  if (en && isUsableArticle(en)) {
-    const photo = extractPhoto(en);
-    if (photo) return photo;
+  const isSaintName = SAINT_PREFIX.test(city.trim());
+
+  if (!isSaintName) {
+    // Normal city name: try direct Wikipedia fetch first (fast path)
+    const en = await fetchSummary('en', city);
+    if (en && isUsableArticle(en)) {
+      const photo = extractPhoto(en);
+      if (photo) return photo;
+    }
+
+    const pt = await fetchSummary('pt', city);
+    if (pt && isUsableArticle(pt)) {
+      const photo = extractPhoto(pt);
+      if (photo) return photo;
+    }
   }
 
-  // 2. Direct fetch from Portuguese Wikipedia
-  const pt = await fetchSummary('pt', city);
-  if (pt && isUsableArticle(pt)) {
-    const photo = extractPhoto(pt);
-    if (photo) return photo;
-  }
-
-  // 3. If both failed (disambiguation, person, or no image) → search Wikipedia
+  // Saint-named cities OR direct fetch failed:
+  // Use Wikipedia search to find the specific municipality article
+  // e.g. "São Roque" → finds "São Roque, São Paulo" which has a real city photo
   const found = await searchWikipediaCity(city);
-  if (found && found.toLowerCase() !== city.toLowerCase()) {
+  if (found) {
     const d = await fetchSummary('en', found);
     if (d && isUsableArticle(d)) {
       const photo = extractPhoto(d);
@@ -83,7 +90,7 @@ async function fetchCityImage(city: string): Promise<string | null> {
     }
   }
 
-  // 4. No usable city image found — return null (gradient background shows instead)
+  // No usable city image — show gradient background
   return null;
 }
 
