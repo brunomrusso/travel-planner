@@ -230,6 +230,7 @@ export default function TripsPage() {
               <User size={18} />
               <span className="hidden sm:inline text-sm">Perfil</span>
             </Link>
+            <CurrencyConverter variant="nav" />
             <button onClick={handleLogout} className="flex items-center gap-1.5 text-gray-500 hover:text-red-500 transition" title="Sair">
               <LogOut size={18} />
               <span className="hidden sm:inline text-sm">Sair</span>
@@ -333,7 +334,6 @@ export default function TripsPage() {
           </div>
         )}
       </main>
-      <CurrencyConverter />
     </div>
   );
 }
