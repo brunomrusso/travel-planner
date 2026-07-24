@@ -12,14 +12,15 @@ function isPhotoUrl(url: string | undefined): boolean {
   return true;
 }
 
-const PERSON_SIGNALS = /\b(saint|são \w+ de |santa \w+ de |born \d|died \d|\d{3,4}[–\-]\d{3,4}|bishop|pope|apostle|martyr|feast day|patron saint|catholic|canonized|beatified|holy|friar|monk|nun|friar)\b/i;
+const PERSON_SIGNALS = /\b(saint|born \d|died \d|\d{3,4}[–\-]\d{3,4}|bishop|pope|apostle|martyr|feast day|patron saint|canonized|beatified|friar|monk|nun)\b/i;
 
-function isAboutPerson(data: Record<string, unknown>): boolean {
+function isUsableArticle(data: Record<string, unknown>): boolean {
+  if (!data) return false;
+  if ((data.type as string) === 'disambiguation') return false;
   const desc = ((data.description as string) || '').toLowerCase();
-  const extract = ((data.extract as string) || '').slice(0, 400).toLowerCase();
-  if (PERSON_SIGNALS.test(desc)) return true;
-  if (/\b(saint|patron|holy|martyred|born in \d|died in \d)\b/.test(extract)) return true;
-  return false;
+  const extract = ((data.extract as string) || '').slice(0, 300).toLowerCase();
+  if (PERSON_SIGNALS.test(desc) || PERSON_SIGNALS.test(extract)) return false;
+  return true;
 }
 
 async function fetchSummary(lang: string, title: string): Promise<Record<string, unknown> | null> {
@@ -34,6 +35,21 @@ async function fetchSummary(lang: string, title: string): Promise<Record<string,
   }
 }
 
+async function searchWikipediaCity(city: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(city + ' city municipality')}&limit=5&format=json&origin=*`
+    );
+    const [, titles] = await res.json() as [unknown, string[]];
+    for (const title of (titles || [])) {
+      if (/municipality|,\s|city in|town in/i.test(title)) return title;
+    }
+    return titles?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 function extractPhoto(data: Record<string, unknown>): string | null {
   const original = (data?.originalimage as Record<string, string> | undefined)?.source;
   const thumb = (data?.thumbnail as Record<string, string> | undefined)?.source;
@@ -43,34 +59,31 @@ function extractPhoto(data: Record<string, unknown>): string | null {
 }
 
 async function fetchCityImage(city: string): Promise<string | null> {
-  // 1. Try English Wikipedia
+  // 1. Direct fetch from English Wikipedia
   const en = await fetchSummary('en', city);
-  if (en && !isAboutPerson(en)) {
+  if (en && isUsableArticle(en)) {
     const photo = extractPhoto(en);
     if (photo) return photo;
   }
 
-  // 2. If English looks like a saint/person, try disambiguation variants
-  if (!en || isAboutPerson(en)) {
-    for (const variant of [`${city} (city)`, `${city} (município)`, `${city}, Brazil`, `${city}, Brasil`]) {
-      const d = await fetchSummary('en', variant) || await fetchSummary('pt', variant);
-      if (d && !isAboutPerson(d)) {
-        const photo = extractPhoto(d);
-        if (photo) return photo;
-      }
-    }
-  }
-
-  // 3. Try Portuguese Wikipedia directly
+  // 2. Direct fetch from Portuguese Wikipedia
   const pt = await fetchSummary('pt', city);
-  if (pt && !isAboutPerson(pt)) {
+  if (pt && isUsableArticle(pt)) {
     const photo = extractPhoto(pt);
     if (photo) return photo;
   }
 
-  // 4. Last resort — use whatever photo we have even if person page
-  if (en) { const p = extractPhoto(en); if (p) return p; }
-  if (pt) { const p = extractPhoto(pt); if (p) return p; }
+  // 3. If both failed (disambiguation, person, or no image) → search Wikipedia
+  const found = await searchWikipediaCity(city);
+  if (found && found.toLowerCase() !== city.toLowerCase()) {
+    const d = await fetchSummary('en', found);
+    if (d && isUsableArticle(d)) {
+      const photo = extractPhoto(d);
+      if (photo) return photo;
+    }
+  }
+
+  // 4. No usable city image found — return null (gradient background shows instead)
   return null;
 }
 
