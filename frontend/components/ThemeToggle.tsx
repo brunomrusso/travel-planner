@@ -40,7 +40,7 @@ export default function ThemeToggle({ variant = 'nav' }: Props) {
   return (
     <button
       onClick={toggle}
-      className="flex items-center gap-1.5 text-gray-500 hover:text-brand-teal transition"
+      className="flex items-center gap-1.5 text-gray-500 hover:text-brand-teal transition outline-none"
       title={dark ? 'Modo claro' : 'Modo escuro'}
     >
       {dark ? <Sun size={18} /> : <Moon size={18} />}
