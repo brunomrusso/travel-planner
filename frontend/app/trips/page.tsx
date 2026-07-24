@@ -7,7 +7,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
-import { User, BookMarked, LogOut, CheckCircle, Trash2, Plane, Clock, Archive } from 'lucide-react';
+import { User, BookMarked, LogOut, CheckCircle, Trash2, Plane, Clock, Archive, Share2 } from 'lucide-react';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
@@ -51,6 +51,7 @@ function daysUntil(dateStr: string): number {
 export default function TripsPage() {
   const router = useRouter();
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [sharedTrips, setSharedTrips] = useState<(Trip & { _shared_by: string; _permission: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState('');
   const [userId, setUserId] = useState('');
@@ -67,6 +68,13 @@ export default function TripsPage() {
           { headers: { Authorization: `Bearer ${data.session.access_token}` } }
         );
         setTrips(response.data);
+        try {
+          const sharedRes = await axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL}/trips/shared-with-me`,
+            { headers: { Authorization: `Bearer ${data.session.access_token}` } }
+          );
+          setSharedTrips(sharedRes.data || []);
+        } catch { /* shared trips are optional */ }
       } catch (error) {
         console.error('Error loading trips:', error);
       } finally {
@@ -277,6 +285,47 @@ export default function TripsPage() {
                 <SectionHeader icon={<Archive size={20} className="text-gray-400" />} label="Viagens Concluídas" count={completed.length} color="border-gray-300" />
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {completed.map(t => <TripCard key={t.id} trip={t} />)}
+                </div>
+              </section>
+            )}
+
+            {sharedTrips.length > 0 && (
+              <section>
+                <SectionHeader icon={<Share2 size={20} className="text-blue-500" />} label="Compartilhadas Comigo" count={sharedTrips.length} color="border-blue-300" />
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sharedTrips.map(t => (
+                    <div key={t.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition">
+                      <CityImage city={t.destination_city} className="relative h-36 bg-gradient-to-r from-blue-400 to-blue-600 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                        <div className="absolute top-3 left-3 bg-blue-500/80 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                          <Share2 size={10} /> {t._permission === 'edit' ? 'Pode editar' : 'Visualizar'}
+                        </div>
+                        <div className="absolute bottom-3 left-4 right-4">
+                          {t.destinations && t.destinations.length > 1 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {t.destinations.map((d, i) => (
+                                <span key={i} className="bg-black/40 backdrop-blur-sm text-white text-sm px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                  <FlagImg code={d.country_code} size="sm" /> {d.city}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <h3 className="text-white font-bold text-xl drop-shadow flex items-center gap-2">
+                              {t.destinations?.[0]?.country_code && <FlagImg code={t.destinations[0].country_code} size="md" />}
+                              {t.destination_city}
+                            </h3>
+                          )}
+                        </div>
+                      </CityImage>
+                      <div className="p-5">
+                        <p className="text-gray-600 text-sm mb-1">📅 {new Date(t.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(t.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                        <p className="text-gray-500 text-sm mb-4">{formatProfiles(t.traveler_profile)}</p>
+                        <Link href={`/trips/${t.id}`} className="w-full block bg-blue-500 text-white px-4 py-2 rounded text-center hover:bg-blue-600 font-medium text-sm">
+                          Ver Roteiro
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
