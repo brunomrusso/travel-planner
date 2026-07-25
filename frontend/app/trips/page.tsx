@@ -151,7 +151,7 @@ export default function TripsPage() {
     const until = daysUntil(trip.start_date);
 
     return (
-      <div className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition group ${status === 'completed' ? 'opacity-80' : ''}`}>
+      <div className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition group flex flex-col ${status === 'completed' ? 'opacity-80' : ''}`}>
         <CityImage city={trip.destination_city} className="relative h-36 bg-gradient-to-r from-brand-teal to-brand-teal-dark overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
           {status === 'ongoing' && (
@@ -186,14 +186,14 @@ export default function TripsPage() {
             )}
           </div>
         </CityImage>
-        <div className="p-5">
+        <div className="p-5 flex flex-col flex-1">
           <p className="text-gray-600 text-sm mb-2 flex items-center gap-1">
             <Calendar size={12} className="flex-shrink-0" />
             {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
             <span className="ml-1 text-gray-400">· {days} {days === 1 ? 'dia' : 'dias'}</span>
           </p>
-          <div className="mb-4"><ProfileChips raw={trip.traveler_profile} /></div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="mb-4 flex-1"><ProfileChips raw={trip.traveler_profile} /></div>
+          <div className="flex gap-2">
             <Link
               href={`/trips/${trip.id}`}
               className="flex-1 bg-brand-teal text-white px-4 py-2 rounded text-center hover:bg-brand-teal-dark font-medium text-sm"
