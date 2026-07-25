@@ -504,6 +504,25 @@ export default function TripDetailPage() {
     } catch (e) { console.error('add attraction', e); }
   };
 
+  const addGemAfterAttraction = async (gem: Attraction, day: number, afterOrder: number) => {
+    const insertOrder = afterOrder + 1;
+    const toShift = itinerary.filter(i => i.day_number === day && i.order_in_day >= insertOrder);
+    try {
+      if (toShift.length > 0) {
+        await persistReorder(toShift.map(i => ({ id: i.id, day_number: i.day_number, order_in_day: i.order_in_day + 1 })));
+      }
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
+        { attraction_id: gem.id, day_number: day, order_in_day: insertOrder, notes: '' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setItinerary(prev => [
+        ...prev.map(i => (i.day_number === day && i.order_in_day >= insertOrder ? { ...i, order_in_day: i.order_in_day + 1 } : i)),
+        res.data,
+      ]);
+    } catch (e) { console.error('add gem', e); }
+  };
+
   const updateDayNote = (day: number, text: string) => {
     setDayNotes(prev => {
       const next = { ...prev, [day]: text };
@@ -1175,8 +1194,8 @@ export default function TripDetailPage() {
                                           </div>
                                           <a href={`https://www.google.com/maps/search/?api=1&query=${g.latitude},${g.longitude}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500 mr-1"><MapPin size={14} /></a>
                                           <button
-                                            onClick={() => addAttractionToDay(g, dayIndex + 1)}
-                                            title="Adicionar ao roteiro deste dia"
+                                            onClick={() => addGemAfterAttraction(g, dayIndex + 1, item.order_in_day)}
+                                            title="Adicionar logo após esta atração"
                                             className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-teal text-white flex items-center justify-center hover:bg-brand-teal-dark transition"
                                           >
                                             <Plus size={12} />
