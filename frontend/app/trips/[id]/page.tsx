@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
 import AttractionModal from '@/components/AttractionModal';
-import TripChat from '@/components/TripChat';
+import TripChat, { type ItineraryAction } from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -143,6 +143,12 @@ const CITY_ALIASES: Record<string, string> = {
   'amsterdam': 'amsterdam',
   'viena': 'vienna',
 };
+
+const PHYSICAL_PROFILES: { id: string; label: string; warn: string; categories: string[] }[] = [
+  { id: 'reduced_mobility', label: 'Mobilidade reduzida', warn: 'Pode ter dificuldade de acesso', categories: ['hiking', 'beach', 'park', 'zoo'] },
+  { id: 'children', label: 'Crianças pequenas', warn: 'Pode não ser adequado para crianças', categories: ['monument', 'gallery', 'museum'] },
+  { id: 'seniors', label: 'Terceira idade', warn: 'Atividade fisicamente exigente', categories: ['hiking', 'beach'] },
+];
 
 function getDayTrips(cities: string[]): { mainCity: string; trips: DayTrip[] } | null {
   for (const city of cities) {
@@ -365,6 +371,11 @@ export default function TripDetailPage() {
     try { const s = localStorage.getItem(`hours_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
   const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
+  const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try { const s = localStorage.getItem(`physical_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
@@ -538,6 +549,35 @@ export default function TripDetailPage() {
     }
     text += `🔗 ${window.location.origin}/shared/${tripId}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const togglePhysicalProfile = (id: string) => {
+    setPhysicalProfiles(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      try { localStorage.setItem(`physical_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const getProfileWarning = (category: string): string | null => {
+    for (const prof of PHYSICAL_PROFILES) {
+      if (physicalProfiles.includes(prof.id) && prof.categories.includes(category)) return prof.warn;
+    }
+    return null;
+  };
+
+  const handleItineraryAction = (action: ItineraryAction) => {
+    const lowerName = action.attraction_name.toLowerCase().trim();
+    const match = itinerary.find(item => {
+      const attr = attractions.find(a => a.id === item.attraction_id);
+      return attr?.name.toLowerCase().trim() === lowerName;
+    });
+    if (!match) return;
+    if (action.type === 'remove') {
+      deleteItem(match);
+    } else if (action.type === 'move' && action.target_day) {
+      moveToDay(match, action.target_day);
+    }
   };
 
   const setCost = (attrId: string, cost: number) => {
@@ -1061,8 +1101,40 @@ export default function TripDetailPage() {
                 >
                   <Banknote size={14} className="inline mr-1" />Custos
                 </button>
+                <button
+                  onClick={() => setShowProfileModal(v => !v)}
+                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                    physicalProfiles.length > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title="Perfil do viajante"
+                >
+                  <User size={14} className="inline mr-1" />Perfil
+                </button>
               </div>
             </div>
+            {/* Physical profile modal */}
+            {showProfileModal && (
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 print:hidden">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Perfil do viajante — alertas de acessibilidade</p>
+                <div className="space-y-2">
+                  {PHYSICAL_PROFILES.map(prof => (
+                    <label key={prof.id} className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={physicalProfiles.includes(prof.id)}
+                        onChange={() => togglePhysicalProfile(prof.id)}
+                        className="w-4 h-4 rounded text-brand-teal accent-brand-teal"
+                      />
+                      <span className="text-sm text-gray-700 group-hover:text-brand-teal transition">{prof.label}</span>
+                      <span className="text-xs text-gray-400 truncate">— {prof.warn}</span>
+                    </label>
+                  ))}
+                </div>
+                {physicalProfiles.length > 0 && (
+                  <p className="mt-2 text-xs text-purple-600">As atrações incompatíveis serão marcadas com alerta ⚠️</p>
+                )}
+              </div>
+            )}
             {/* Search bar */}
             <div className="relative print:hidden">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -1348,6 +1420,14 @@ export default function TripDetailPage() {
                                           <AlertTriangle size={10} /> Horário
                                         </span>
                                       )}
+                                      {attraction && (() => {
+                                        const w = getProfileWarning(attraction.category);
+                                        return w ? (
+                                          <span className="inline-flex items-center gap-0.5 text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded-full px-1.5 py-0.5 font-medium">
+                                            <AlertTriangle size={10} /> {w}
+                                          </span>
+                                        ) : null;
+                                      })()}
                                       <span>{categoryPt}</span>
                                       <span className="sm:hidden text-xs">⏱ {durationStr}</span>
                                       {(() => {
@@ -1816,7 +1896,12 @@ export default function TripDetailPage() {
       )}
 
       {token && trip && (
-        <TripChat tripId={tripId} city={trip.destination_city} token={token} />
+        <TripChat
+          tripId={tripId}
+          city={trip.destination_city}
+          token={token}
+          onItineraryAction={handleItineraryAction}
+        />
       )}
 
       {trip && (
