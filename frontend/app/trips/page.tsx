@@ -7,19 +7,36 @@ import Link from 'next/link';
 import axios from 'axios';
 import FlagImg from '@/components/FlagImg';
 import CityImage from '@/components/CityImage';
-import { User, BookMarked, LogOut, CheckCircle, Trash2, Plane, Clock, Archive, Share2 } from 'lucide-react';
+import { User, BookMarked, LogOut, CheckCircle, Trash2, Plane, Clock, Archive, Share2, Calendar, Landmark, Utensils, Waves, Users, Mountain, type LucideIcon } from 'lucide-react';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ThemeToggle from '@/components/ThemeToggle';
 
 interface DestinationCity { city: string; country: string; country_code: string; }
 
-const PROFILE_PT: Record<string, string> = {
-  adventure: '🏔️ Aventura', cultural: '🏛️ Cultural', gastronomic: '🍽️ Gastronômico',
-  relax: '🏖️ Relaxamento', family: '👨‍👩‍👧‍👦 Família',
+const PROFILE_LABELS: Record<string, string> = {
+  adventure: 'Aventura', cultural: 'Cultural', gastronomic: 'Gastronômico',
+  relax: 'Relaxamento', family: 'Família',
 };
-
-const formatProfiles = (raw: string) =>
-  raw.split(',').map(p => PROFILE_PT[p.trim()] || p.trim()).join(' • ');
+const PROFILE_ICONS: Record<string, LucideIcon> = {
+  adventure: Mountain, cultural: Landmark, gastronomic: Utensils,
+  relax: Waves, family: Users,
+};
+function ProfileChips({ raw }: { raw: string }) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {raw.split(',').map(p => {
+        const key = p.trim();
+        const Icon = PROFILE_ICONS[key] || User;
+        return (
+          <span key={key} className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            <Icon size={11} strokeWidth={1.5} />
+            {PROFILE_LABELS[key] || key}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Trip {
   id: string;
@@ -170,11 +187,12 @@ export default function TripsPage() {
           </div>
         </CityImage>
         <div className="p-5">
-          <p className="text-gray-600 text-sm mb-1">
-            📅 {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-            <span className="ml-2 text-gray-400">· {days} {days === 1 ? 'dia' : 'dias'}</span>
+          <p className="text-gray-600 text-sm mb-2 flex items-center gap-1">
+            <Calendar size={12} className="flex-shrink-0" />
+            {new Date(trip.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(trip.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+            <span className="ml-1 text-gray-400">· {days} {days === 1 ? 'dia' : 'dias'}</span>
           </p>
-          <p className="text-gray-500 text-sm mb-4">{formatProfiles(trip.traveler_profile)}</p>
+          <div className="mb-4"><ProfileChips raw={trip.traveler_profile} /></div>
           <div className="flex gap-2 flex-wrap">
             <Link
               href={`/trips/${trip.id}`}
@@ -321,8 +339,11 @@ export default function TripsPage() {
                         </div>
                       </CityImage>
                       <div className="p-5">
-                        <p className="text-gray-600 text-sm mb-1">📅 {new Date(t.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(t.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                        <p className="text-gray-500 text-sm mb-4">{formatProfiles(t.traveler_profile)}</p>
+                        <p className="text-gray-600 text-sm mb-2 flex items-center gap-1">
+                          <Calendar size={12} className="flex-shrink-0" />
+                          {new Date(t.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(t.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </p>
+                        <div className="mb-4"><ProfileChips raw={t.traveler_profile} /></div>
                         <Link href={`/trips/${t.id}`} className="w-full block bg-blue-500 text-white px-4 py-2 rounded text-center hover:bg-blue-600 font-medium text-sm">
                           Ver Roteiro
                         </Link>
