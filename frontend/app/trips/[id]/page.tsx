@@ -13,7 +13,7 @@ import TripChat from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, type LucideIcon } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -214,6 +214,16 @@ const TRANSPORT_MODES: Array<{ id: string; icon: string; label: string; speedKmh
   { id: 'taxi', icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, maxKm: 9999 },
 ];
 
+const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
+  restaurant: Utensils, museum: Landmark, park: Leaf, historic: Landmark,
+  entertainment: Music, beach: Waves, spa: Heart, zoo: PawPrint,
+  market: ShoppingBag, gallery: Palette,
+};
+function CategoryIcon({ category, size = 20, className = 'text-gray-400' }: { category: string; size?: number; className?: string }) {
+  const Icon = CATEGORY_ICON_MAP[category] || MapPin;
+  return <Icon size={size} className={className} strokeWidth={1.5} />;
+}
+
 interface DestinationCity { city: string; country: string; country_code: string; }
 
 const WEATHER_ICON: Record<number, string> = {
@@ -313,6 +323,7 @@ export default function TripDetailPage() {
   const [addingDayTrip, setAddingDayTrip] = useState(false);
   const [dayTripMsg, setDayTripMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [expandedLeg, setExpandedLeg] = useState<string | null>(null);
   const [legTransport, setLegTransport] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -1059,30 +1070,52 @@ export default function TripDetailPage() {
                           const defaultModeId = distKm < 1.0 ? 'walk' : distKm < 3.5 ? 'bus' : 'taxi';
                           const selectedModeId = legTransport[legKey] || defaultModeId;
                           const availableModes = TRANSPORT_MODES.filter(m => distKm <= m.maxKm);
+                          const selectedMode = availableModes.find(m => m.id === selectedModeId) || availableModes[availableModes.length - 1];
                           const fmtMin = (m: number) => m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}min` : ''}`;
+                          const travelMin = Math.round((distKm / selectedMode.speedKmh) * 60);
+                          const isExpanded = expandedLeg === legKey;
+                          const transportColor = selectedMode.id === 'walk' ? 'text-green-700 bg-green-50 border-green-200'
+                            : selectedMode.id === 'bike' ? 'text-lime-700 bg-lime-50 border-lime-200'
+                            : selectedMode.id === 'bus' ? 'text-blue-700 bg-blue-50 border-blue-200'
+                            : 'text-orange-700 bg-orange-50 border-orange-200';
                           travelConnector = (
-                            <div className="flex items-center gap-2 flex-wrap px-4 sm:px-5 py-2 border-l-2 border-dashed border-gray-200 ml-[28px]">
-                              {availableModes.map(mode => {
-                                const min = Math.round((distKm / mode.speedKmh) * 60);
-                                const isSelected = mode.id === selectedModeId;
-                                return (
-                                  <button
-                                    key={mode.id}
-                                    onClick={() => setLegMode(legKey, mode.id)}
-                                    title={mode.label}
-                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition ${
-                                      isSelected
-                                        ? 'bg-brand-teal text-white border-brand-teal shadow-sm'
-                                        : 'text-gray-500 bg-white border-gray-200 hover:border-brand-teal hover:text-brand-teal'
-                                    }`}
-                                  >
-                                    <span>{mode.icon}</span>
-                                    <span className="hidden sm:inline">{mode.label}</span>
-                                    <span>~{fmtMin(min)}</span>
-                                  </button>
-                                );
-                              })}
-                              <span className="text-xs text-gray-400">{distKm.toFixed(1)} km</span>
+                            <div className="flex flex-col gap-1 px-4 sm:px-5 py-2 border-l-2 border-dashed border-gray-200 ml-[28px]">
+                              {!isExpanded ? (
+                                <button
+                                  onClick={() => setExpandedLeg(legKey)}
+                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium w-fit transition hover:opacity-80 ${transportColor}`}
+                                >
+                                  <span>{selectedMode.icon}</span>
+                                  <span>{selectedMode.label}</span>
+                                  <span className="opacity-60">•</span>
+                                  <span>{distKm.toFixed(1)} km</span>
+                                  <span className="opacity-60">•</span>
+                                  <span>~{fmtMin(travelMin)}</span>
+                                  <ChevronDown size={12} className="opacity-60" />
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {availableModes.map(mode => {
+                                    const min = Math.round((distKm / mode.speedKmh) * 60);
+                                    const isSel = mode.id === selectedModeId;
+                                    return (
+                                      <button
+                                        key={mode.id}
+                                        onClick={() => { setLegMode(legKey, mode.id); setExpandedLeg(null); }}
+                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition ${
+                                          isSel ? 'bg-brand-teal text-white border-brand-teal shadow-sm'
+                                               : 'text-gray-500 bg-white border-gray-200 hover:border-brand-teal hover:text-brand-teal'
+                                        }`}
+                                      >
+                                        <span>{mode.icon}</span>
+                                        <span className="hidden sm:inline">{mode.label}</span>
+                                        <span>~{fmtMin(min)}</span>
+                                      </button>
+                                    );
+                                  })}
+                                  <span className="text-xs text-gray-400">{distKm.toFixed(1)} km</span>
+                                </div>
+                              )}
                             </div>
                           );
                         }
@@ -1162,7 +1195,9 @@ export default function TripDetailPage() {
                                     lon: attraction.longitude,
                                   })}
                                 >
-                                  <div className="text-2xl flex-shrink-0">{icon}</div>
+                                  <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                                    <CategoryIcon category={attraction?.category || ''} size={20} />
+                                  </div>
                                   <div className="flex-1 min-w-0">
                                     <h4 className={`font-bold leading-snug group-hover:text-brand-teal transition ${
                                       visited.has(item.attraction_id) ? 'line-through text-gray-400' : 'text-gray-900'
@@ -1226,7 +1261,7 @@ export default function TripDetailPage() {
                                     <div className="mt-1.5 space-y-1">
                                       {gems.map((g: any) => (
                                         <div key={g.id} className="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-                                          <span className="text-lg">{CATEGORY_ICONS[g.category] || '📍'}</span>
+                                          <div className="flex-shrink-0"><CategoryIcon category={g.category} size={16} /></div>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-gray-800 truncate">{g.name}</p>
                                             <p className="text-xs text-gray-400">{CATEGORY_PT[g.category] || g.category} • {(g._dist * 1000).toFixed(0)}m</p>
