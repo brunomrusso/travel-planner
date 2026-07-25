@@ -207,6 +207,13 @@ function getTransport(distKm: number) {
   return { icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, color: 'text-orange-700 bg-orange-50 border-orange-200' };
 }
 
+const TRANSPORT_MODES: Array<{ id: string; icon: string; label: string; speedKmh: number; maxKm: number }> = [
+  { id: 'walk', icon: '🚶', label: 'A pé',        speedKmh: 5,  maxKm: 3    },
+  { id: 'bike', icon: '🚴', label: 'Bicicleta',   speedKmh: 15, maxKm: 8    },
+  { id: 'bus',  icon: '🚌', label: 'T. público',  speedKmh: 20, maxKm: 9999 },
+  { id: 'taxi', icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, maxKm: 9999 },
+];
+
 interface DestinationCity { city: string; country: string; country_code: string; }
 
 const WEATHER_ICON: Record<number, string> = {
@@ -306,6 +313,13 @@ export default function TripDetailPage() {
   const [addingDayTrip, setAddingDayTrip] = useState(false);
   const [dayTripMsg, setDayTripMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [legTransport, setLegTransport] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(`leg_transport_${window.location.pathname.split('/').pop()}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string }>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -468,6 +482,14 @@ export default function TripDetailPage() {
     }
     text += `🔗 ${window.location.origin}/shared/${tripId}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const setLegMode = (legKey: string, modeId: string) => {
+    setLegTransport(prev => {
+      const next = { ...prev, [legKey]: modeId };
+      try { localStorage.setItem(`leg_transport_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const updateAccommodation = (day: number, field: 'name' | 'address', value: string) => {
@@ -1033,18 +1055,34 @@ export default function TripDetailPage() {
                         let travelConnector = null;
                         if (attraction && nextAttraction) {
                           const distKm = haversineKm(attraction.latitude, attraction.longitude, nextAttraction.latitude, nextAttraction.longitude);
-                          const transport = getTransport(distKm);
-                          const travelMin = Math.round((distKm / transport.speedKmh) * 60);
+                          const legKey = `${item.attraction_id}_${nextItem!.attraction_id}`;
+                          const defaultModeId = distKm < 1.0 ? 'walk' : distKm < 3.5 ? 'bus' : 'taxi';
+                          const selectedModeId = legTransport[legKey] || defaultModeId;
+                          const availableModes = TRANSPORT_MODES.filter(m => distKm <= m.maxKm);
+                          const fmtMin = (m: number) => m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}min` : ''}`;
                           travelConnector = (
-                            <div className="flex items-center gap-2 px-5 py-2 border-l-2 border-dashed border-gray-200 ml-[28px]">
-                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${transport.color}`}>
-                                <span>{transport.icon}</span>
-                                <span>{transport.label}</span>
-                                <span className="text-gray-400">•</span>
-                                <span>{distKm.toFixed(1)} km</span>
-                                <span className="text-gray-400">•</span>
-                                <span>~{travelMin} min</span>
-                              </div>
+                            <div className="flex items-center gap-2 flex-wrap px-4 sm:px-5 py-2 border-l-2 border-dashed border-gray-200 ml-[28px]">
+                              {availableModes.map(mode => {
+                                const min = Math.round((distKm / mode.speedKmh) * 60);
+                                const isSelected = mode.id === selectedModeId;
+                                return (
+                                  <button
+                                    key={mode.id}
+                                    onClick={() => setLegMode(legKey, mode.id)}
+                                    title={mode.label}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition ${
+                                      isSelected
+                                        ? 'bg-brand-teal text-white border-brand-teal shadow-sm'
+                                        : 'text-gray-500 bg-white border-gray-200 hover:border-brand-teal hover:text-brand-teal'
+                                    }`}
+                                  >
+                                    <span>{mode.icon}</span>
+                                    <span className="hidden sm:inline">{mode.label}</span>
+                                    <span>~{fmtMin(min)}</span>
+                                  </button>
+                                );
+                              })}
+                              <span className="text-xs text-gray-400">{distKm.toFixed(1)} km</span>
                             </div>
                           );
                         }
