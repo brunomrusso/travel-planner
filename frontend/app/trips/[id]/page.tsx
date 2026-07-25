@@ -1090,7 +1090,7 @@ export default function TripDetailPage() {
                               </div>
                             ) : (
                               <div
-                                className={`w-full flex items-center gap-4 p-5 border-b border-gray-100 last:border-0 transition ${
+                                className={`w-full flex items-center gap-2 sm:gap-4 px-4 sm:p-5 py-3 sm:py-4 border-b border-gray-100 last:border-0 transition ${
                                   visited.has(item.attraction_id)
                                     ? 'bg-green-50/60'
                                     : 'hover:bg-teal-50/60'
@@ -1126,7 +1126,7 @@ export default function TripDetailPage() {
                                 >
                                   <div className="text-2xl flex-shrink-0">{icon}</div>
                                   <div className="flex-1 min-w-0">
-                                    <h4 className={`font-bold truncate group-hover:text-brand-teal transition ${
+                                    <h4 className={`font-bold leading-snug group-hover:text-brand-teal transition ${
                                       visited.has(item.attraction_id) ? 'line-through text-gray-400' : 'text-gray-900'
                                     }`}>{attraction?.name || 'Atração'}</h4>
                                     <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
@@ -1134,6 +1134,7 @@ export default function TripDetailPage() {
                                         <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
                                       )}
                                       <span>{categoryPt}</span>
+                                      <span className="sm:hidden text-xs">⏱ {durationStr}</span>
                                       {(() => {
                                         const dk = dayDate.toISOString().split('T')[0];
                                         const w = weatherByDate[dk];
@@ -1148,8 +1149,8 @@ export default function TripDetailPage() {
                                       })()}
                                     </p>
                                   </div>
-                                  <div className="flex-shrink-0 flex items-center gap-2">
-                                    <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                                  <div className="flex-shrink-0 flex items-center gap-1.5">
+                                    <span className="hidden sm:inline bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                                       ⏱ {durationStr}
                                     </span>
                                     {attraction && (
@@ -1164,7 +1165,7 @@ export default function TripDetailPage() {
                                         <MapPin size={16} />
                                       </a>
                                     )}
-                                    <Info size={16} className="print:hidden text-gray-300 group-hover:text-brand-teal transition flex-shrink-0" />
+                                    <Info size={16} className="hidden sm:block print:hidden text-gray-300 group-hover:text-brand-teal transition flex-shrink-0" />
                                   </div>
                                 </button>
                               </div>
