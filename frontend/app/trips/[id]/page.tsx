@@ -546,11 +546,18 @@ export default function TripDetailPage() {
 
   const hiddenGemsFor = (attr: Attraction): Attraction[] => {
     const inItin = new Set(itinerary.map(i => i.attraction_id));
+    const seen = new Set<string>();
     return attractions
       .filter(a => !inItin.has(a.id) && a.id !== attr.id)
       .map(a => ({ ...a, _dist: haversineKm(attr.latitude, attr.longitude, a.latitude, a.longitude) }))
       .filter((a: any) => a._dist > 0.05 && a._dist < 0.7)
       .sort((a: any, b: any) => a._dist - b._dist)
+      .filter((a: any) => {
+        const key = a.name.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .slice(0, 3);
   };
 
