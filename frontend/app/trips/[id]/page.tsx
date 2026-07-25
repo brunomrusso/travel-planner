@@ -13,7 +13,7 @@ import TripChat from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, type LucideIcon } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, type LucideIcon } from 'lucide-react';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -207,11 +207,11 @@ function getTransport(distKm: number) {
   return { icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, color: 'text-orange-700 bg-orange-50 border-orange-200' };
 }
 
-const TRANSPORT_MODES: Array<{ id: string; icon: string; label: string; speedKmh: number; maxKm: number }> = [
-  { id: 'walk', icon: '🚶', label: 'A pé',        speedKmh: 5,  maxKm: 3    },
-  { id: 'bike', icon: '🚴', label: 'Bicicleta',   speedKmh: 15, maxKm: 8    },
-  { id: 'bus',  icon: '🚌', label: 'T. público',  speedKmh: 20, maxKm: 9999 },
-  { id: 'taxi', icon: '🚕', label: 'Táxi / Uber', speedKmh: 25, maxKm: 9999 },
+const TRANSPORT_MODES: Array<{ id: string; label: string; speedKmh: number; maxKm: number }> = [
+  { id: 'walk', label: 'A pé',        speedKmh: 5,  maxKm: 3    },
+  { id: 'bike', label: 'Bicicleta',   speedKmh: 15, maxKm: 8    },
+  { id: 'bus',  label: 'T. público',  speedKmh: 20, maxKm: 9999 },
+  { id: 'taxi', label: 'Táxi / Uber', speedKmh: 25, maxKm: 9999 },
 ];
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
@@ -222,6 +222,12 @@ const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
 function CategoryIcon({ category, size = 20, className = 'text-gray-400' }: { category: string; size?: number; className?: string }) {
   const Icon = CATEGORY_ICON_MAP[category] || MapPin;
   return <Icon size={size} className={className} strokeWidth={1.5} />;
+}
+function TransportIcon({ modeId, size = 14, className = '' }: { modeId: string; size?: number; className?: string }) {
+  if (modeId === 'walk') return <User size={size} className={className} strokeWidth={1.5} />;
+  if (modeId === 'bike') return <Bike size={size} className={className} strokeWidth={1.5} />;
+  if (modeId === 'bus')  return <Bus  size={size} className={className} strokeWidth={1.5} />;
+  return <Car size={size} className={className} strokeWidth={1.5} />;
 }
 
 interface DestinationCity { city: string; country: string; country_code: string; }
@@ -795,10 +801,10 @@ export default function TripDetailPage() {
           )}
           <div className="flex flex-wrap gap-3 mt-3">
             <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-              📅 {startDateFmt} → {endDateFmt}
+              <Calendar size={12} className="inline mr-1" />{startDateFmt} → {endDateFmt}
             </span>
             <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-              🕐 {days} {days === 1 ? 'dia' : 'dias'}
+              <Clock size={12} className="inline mr-1" />{days} {days === 1 ? 'dia' : 'dias'}
             </span>
             <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
               {trip.traveler_profile.split(',').map(p => PROFILE_PT[p.trim()] || p.trim()).join(' • ')}
@@ -841,10 +847,10 @@ export default function TripDetailPage() {
             <div className="w-full bg-white/30 rounded-full h-2 mb-2">
               <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
             </div>
-            <p className="text-sm opacity-90">
+            <p className="text-sm opacity-90 flex items-center gap-1.5">
               {days - currentDayNumber === 0
-                ? '🎉 Último dia! Aproveite ao máximo!'
-                : `✈️ ${days - currentDayNumber} dia${days - currentDayNumber > 1 ? 's' : ''} restante${days - currentDayNumber > 1 ? 's' : ''} — role para ver o dia atual destacado`}
+                ? <><Trophy size={14} /> Último dia! Aproveite ao máximo!</>
+                : <><Plane size={14} /> {days - currentDayNumber} dia{days - currentDayNumber > 1 ? 's' : ''} restante{days - currentDayNumber > 1 ? 's' : ''} — role para ver o dia atual destacado</>}
             </p>
           </div>
         )}
@@ -858,7 +864,7 @@ export default function TripDetailPage() {
 
         {itinerary.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-8 mb-8 text-center">
-            <div className="text-6xl mb-4">🗺️</div>
+            <Map size={64} className="mx-auto mb-4 text-gray-300" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu roteiro está pronto para ser criado!</h2>
             <p className="text-gray-500 mb-6">Vamos montar um itinerário personalizado para {trip.destination_city} com base no seu perfil de viagem.</p>
             <button
@@ -871,7 +877,7 @@ export default function TripDetailPage() {
                   <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Gerando roteiro... (pode levar até 30s)
                 </>
-              ) : '✨ Gerar Roteiro'}
+              ) : <><Sparkles size={14} className="inline mr-1" />Gerar Roteiro</>}
             </button>
           </div>
         ) : (
@@ -905,7 +911,7 @@ export default function TripDetailPage() {
                 <div key={i} className={`flex items-start gap-2 px-4 py-3 rounded-xl text-sm ${
                   a.warn ? 'bg-orange-50 border border-orange-200 text-orange-800' : 'bg-blue-50 border border-blue-200 text-blue-800'
                 }`}>
-                  <span className="flex-shrink-0">{a.warn ? '⚠️' : 'ℹ️'}</span>
+                  {a.warn ? <AlertTriangle size={16} className="flex-shrink-0" /> : <Info size={16} className="flex-shrink-0" />}
                   <span>{a.msg}</span>
                 </div>
               ))}
@@ -917,7 +923,7 @@ export default function TripDetailPage() {
         {itinerary.length > 0 && (
           <div className="space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
-              <h2 className="text-2xl font-bold text-gray-900">📋 Roteiro de Viagem</h2>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList size={22} /> Roteiro de Viagem</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => { setPackingChecked(new Set()); setShowPackingList(true); }}
@@ -946,7 +952,7 @@ export default function TripDetailPage() {
               </div>
             </div>
             {visited.size > 0 && !isReordering && (
-              <p className="text-sm text-green-600 print:hidden">✅ {visited.size} {visited.size === 1 ? 'atração visitada' : 'atrações visitadas'}</p>
+              <p className="text-sm text-green-600 print:hidden flex items-center gap-1"><Check size={14} /> {visited.size} {visited.size === 1 ? 'atração visitada' : 'atrações visitadas'}</p>
             )}
             {tipsLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-400 animate-pulse">
@@ -956,7 +962,7 @@ export default function TripDetailPage() {
             )}
             {tips?.overview && (
               <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4 flex gap-3 items-start">
-                <span className="text-2xl flex-shrink-0">🌍</span>
+                <Globe size={22} className="flex-shrink-0 text-teal-600" />
                 <p className="text-teal-800 text-sm leading-relaxed">{tips.overview}</p>
               </div>
             )}
@@ -1026,7 +1032,7 @@ export default function TripDetailPage() {
                   {/* Hospedagem (banner) */}
                   {dayAccommodation[dayIndex + 1]?.name && (
                     <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-b border-blue-100 text-sm text-blue-800">
-                      <span className="text-base flex-shrink-0">🏨</span>
+                      <BedDouble size={16} className="flex-shrink-0 text-blue-500" />
                       <span className="font-medium truncate">{dayAccommodation[dayIndex + 1].name}</span>
                       {dayAccommodation[dayIndex + 1].address && (
                         <span className="text-blue-500 text-xs truncate hidden sm:inline">· {dayAccommodation[dayIndex + 1].address}</span>
@@ -1039,9 +1045,9 @@ export default function TripDetailPage() {
                     if (!dt) return null;
                     return (
                       <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 space-y-1">
-                        <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">✨ {dt.theme}</p>
-                        <p className="text-sm text-amber-800">💡 {dt.tip}</p>
-                        <p className="text-sm text-amber-800">🍽️ {dt.food}</p>
+                        <p className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1"><Sparkles size={12} /> {dt.theme}</p>
+                        <p className="text-sm text-amber-800 flex items-center gap-1.5"><Lightbulb size={14} /> {dt.tip}</p>
+                        <p className="text-sm text-amber-800 flex items-center gap-1.5"><Utensils size={14} /> {dt.food}</p>
                       </div>
                     );
                   })()}
@@ -1085,7 +1091,7 @@ export default function TripDetailPage() {
                                   onClick={() => setExpandedLeg(legKey)}
                                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium w-fit transition hover:opacity-80 ${transportColor}`}
                                 >
-                                  <span>{selectedMode.icon}</span>
+                                  <TransportIcon modeId={selectedMode.id} size={14} />
                                   <span>{selectedMode.label}</span>
                                   <span className="opacity-60">•</span>
                                   <span>{distKm.toFixed(1)} km</span>
@@ -1107,7 +1113,7 @@ export default function TripDetailPage() {
                                                : 'text-gray-500 bg-white border-gray-200 hover:border-brand-teal hover:text-brand-teal'
                                         }`}
                                       >
-                                        <span>{mode.icon}</span>
+                                        <TransportIcon modeId={mode.id} size={12} />
                                         <span className="hidden sm:inline">{mode.label}</span>
                                         <span>~{fmtMin(min)}</span>
                                       </button>
@@ -1255,7 +1261,7 @@ export default function TripDetailPage() {
                                     onClick={() => setExpandedGems(prev => { const n = new Set(prev); open ? n.delete(key) : n.add(key); return n; })}
                                     className="text-xs text-brand-teal hover:text-brand-teal-dark font-medium flex items-center gap-1"
                                   >
-                                    🔍 {gems.length} descoberta{gems.length > 1 ? 's' : ''} próxima{gems.length > 1 ? 's' : ''} {open ? '▲' : '▼'}
+                                    <Search size={12} /> {gems.length} descoberta{gems.length > 1 ? 's' : ''} próxima{gems.length > 1 ? 's' : ''} {open ? '▲' : '▼'}
                                   </button>
                                   {open && (
                                     <div className="mt-1.5 space-y-1">
@@ -1305,7 +1311,7 @@ export default function TripDetailPage() {
                   {/* Hospedagem (input) */}
                   <div className="print:hidden border-t border-gray-100 px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-base flex-shrink-0">🏨</span>
+                      <BedDouble size={16} className="flex-shrink-0 text-gray-300" />
                       <input
                         type="text"
                         placeholder="Hotel / Airbnb desta noite (opcional)"
@@ -1317,7 +1323,7 @@ export default function TripDetailPage() {
                     {dayAccommodation[dayIndex + 1]?.name && (
                       <input
                         type="text"
-                        placeholder="📍 Endereço (opcional)"
+                        placeholder="Endereço (opcional)"
                         value={dayAccommodation[dayIndex + 1]?.address || ''}
                         onChange={e => updateAccommodation(dayIndex + 1, 'address', e.target.value)}
                         className="mt-1 w-full text-xs text-gray-400 placeholder-gray-300 bg-transparent outline-none pl-6"
@@ -1327,13 +1333,15 @@ export default function TripDetailPage() {
 
                   {/* Notas do dia */}
                   <div className="print:hidden border-t border-gray-100 px-5 py-3">
-                    <textarea
-                      placeholder="📝 Notas do dia (reservas, lembretes...)"
+                    <div className="flex items-start gap-2">
+                      <FileText size={14} className="text-gray-300 mt-2 flex-shrink-0" />
+                      <textarea
+                      placeholder="Notas do dia (reservas, lembretes...)"
                       value={dayNotes[dayIndex + 1] || ''}
                       onChange={e => updateDayNote(dayIndex + 1, e.target.value)}
                       rows={dayNotes[dayIndex + 1] ? 3 : 1}
                       className="w-full text-sm text-gray-600 placeholder-gray-300 bg-gray-50/60 rounded-lg px-3 py-2 border border-transparent focus:border-gray-200 focus:bg-white outline-none resize-none transition"
-                    />
+                    /></div>
                   </div>
                 </div>
               );
