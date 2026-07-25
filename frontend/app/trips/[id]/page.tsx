@@ -13,7 +13,10 @@ import TripChat from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, type LucideIcon } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, Banknote, GripVertical, type LucideIcon } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const ItineraryMap = dynamic(() => import('@/components/ItineraryMap'), {
   ssr: false,
@@ -230,6 +233,27 @@ function TransportIcon({ modeId, size = 14, className = '' }: { modeId: string; 
   return <Car size={size} className={className} strokeWidth={1.5} />;
 }
 
+function SortableItem({ id, children }: { id: string; children: (dragHandle: React.ReactElement) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const dragHandle = (
+    <button
+      {...listeners} {...attributes}
+      className="cursor-grab active:cursor-grabbing touch-none text-gray-300 hover:text-gray-500 px-1 flex-shrink-0"
+      title="Arrastar para reorganizar"
+    >
+      <GripVertical size={18} />
+    </button>
+  );
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 50 : undefined }}
+    >
+      {children(dragHandle)}
+    </div>
+  );
+}
+
 interface DestinationCity { city: string; country: string; country_code: string; }
 
 const WEATHER_ICON: Record<number, string> = {
@@ -330,6 +354,21 @@ export default function TripDetailPage() {
   const [dayTripMsg, setDayTripMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [expandedLeg, setExpandedLeg] = useState<string | null>(null);
+  const [itinSearch, setItinSearch] = useState('');
+  const [showCosts, setShowCosts] = useState(false);
+  const [attractionCosts, setAttractionCosts] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { const s = localStorage.getItem(`costs_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+  const [attractionHours, setAttractionHours] = useState<Record<string, { open: string; close: string; closedDays: number[] }>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { const s = localStorage.getItem(`hours_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+  const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
   const [legTransport, setLegTransport] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {};
     try {
@@ -499,6 +538,65 @@ export default function TripDetailPage() {
     }
     text += `🔗 ${window.location.origin}/shared/${tripId}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const setCost = (attrId: string, cost: number) => {
+    setAttractionCosts(prev => {
+      const next = { ...prev, [attrId]: cost };
+      try { localStorage.setItem(`costs_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const updateAttrHours = (attrId: string, field: 'open' | 'close', value: string) => {
+    setAttractionHours(prev => {
+      const cur = prev[attrId] || { open: '', close: '', closedDays: [] };
+      const next = { ...prev, [attrId]: { ...cur, [field]: value } };
+      try { localStorage.setItem(`hours_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const toggleClosedDay = (attrId: string, day: number) => {
+    setAttractionHours(prev => {
+      const cur = prev[attrId] || { open: '', close: '', closedDays: [] };
+      const days = cur.closedDays.includes(day) ? cur.closedDays.filter(d => d !== day) : [...cur.closedDays, day];
+      const next = { ...prev, [attrId]: { ...cur, closedDays: days } };
+      try { localStorage.setItem(`hours_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const getDayCost = (dayItems: ItineraryItem[]) => {
+    const attrTotal = dayItems.reduce((s, i) => s + (attractionCosts[i.attraction_id] || 0), 0);
+    let transTotal = 0;
+    for (let i = 0; i < dayItems.length - 1; i++) {
+      const from = attractions.find(a => a.id === dayItems[i].attraction_id);
+      const to = attractions.find(a => a.id === dayItems[i + 1].attraction_id);
+      if (!from || !to) continue;
+      const dist = haversineKm(from.latitude, from.longitude, to.latitude, to.longitude);
+      const lk = `${dayItems[i].attraction_id}_${dayItems[i + 1].attraction_id}`;
+      const mode = legTransport[lk] || (dist < 1 ? 'walk' : dist < 3.5 ? 'bus' : 'taxi');
+      if (mode === 'bike') transTotal += 5;
+      else if (mode === 'bus') transTotal += 5;
+      else if (mode === 'taxi') transTotal += Math.max(10, Math.round(dist * 3));
+    }
+    return { total: attrTotal + transTotal, transport: transTotal, attractions: attrTotal };
+  };
+  const hasHoursConflict = (attrId: string, startTime: string | undefined, dayDate: Date) => {
+    const h = attractionHours[attrId];
+    if (!h) return false;
+    if (h.closedDays.includes(dayDate.getDay())) return true;
+    if (h.open && h.close && startTime) { const t = startTime.slice(0, 5); return t < h.open || t > h.close; }
+    return false;
+  };
+  const handleDragEnd = (event: DragEndEvent, dayItems: ItineraryItem[]) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = dayItems.findIndex(i => i.id === active.id);
+    const newIdx = dayItems.findIndex(i => i.id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const reordered = arrayMove(dayItems, oldIdx, newIdx).map((item, idx) => ({ ...item, order_in_day: idx + 1 }));
+    const dayNum = dayItems[0].day_number;
+    setItinerary(prev => prev.filter(i => i.day_number !== dayNum).concat(reordered).sort((a, b) => a.day_number - b.day_number || a.order_in_day - b.order_in_day));
+    persistReorder(reordered);
   };
 
   const setLegMode = (legKey: string, modeId: string) => {
@@ -954,7 +1052,32 @@ export default function TripDetailPage() {
                 >
                   {isReordering ? <><Check size={14} className="inline mr-1" />Concluir</> : <><ArrowUpDown size={14} className="inline mr-1" />Reorganizar</>}
                 </button>
+                <button
+                  onClick={() => setShowCosts(v => !v)}
+                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                    showCosts ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title="Estimativa de custos"
+                >
+                  <Banknote size={14} className="inline mr-1" />Custos
+                </button>
               </div>
+            </div>
+            {/* Search bar */}
+            <div className="relative print:hidden">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar atração no roteiro..."
+                value={itinSearch}
+                onChange={e => setItinSearch(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg shadow-sm outline-none focus:border-brand-teal transition placeholder-gray-300"
+              />
+              {itinSearch && (
+                <button onClick={() => setItinSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X size={14} />
+                </button>
+              )}
             </div>
             {visited.size > 0 && !isReordering && (
               <p className="text-sm text-green-600 print:hidden flex items-center gap-1"><Check size={14} /> {visited.size} {visited.size === 1 ? 'atração visitada' : 'atrações visitadas'}</p>
@@ -986,6 +1109,13 @@ export default function TripDetailPage() {
                   return a ? { lat: a.latitude, lng: a.longitude, name: a.name, order: i + 1 } : null;
                 })
                 .filter((p): p is { lat: number; lng: number; name: string; order: number } => p !== null);
+
+              // Search filter
+              const dayHasMatch = !itinSearch || dayItems.some(item => {
+                const attr = attractions.find(a => a.id === item.attraction_id);
+                return attr?.name.toLowerCase().includes(itinSearch.toLowerCase());
+              });
+              if (itinSearch && !dayHasMatch) return null;
 
               return (
                 <div key={dayIndex} id={`day-${dayIndex + 1}`} className={`bg-white rounded-xl shadow-sm overflow-hidden scroll-mt-4 ${currentDayNumber === dayIndex + 1 ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}>
@@ -1031,6 +1161,11 @@ export default function TripDetailPage() {
                     <div className="text-right">
                       <p className="text-white font-semibold">{dayItems.length} {dayItems.length === 1 ? 'atração' : 'atrações'}</p>
                       {dayDuration > 0 && <p className="text-white/80 text-sm">~{Math.round(dayDuration / 60)}h de atividades</p>}
+                      {showCosts && (() => {
+                        const { total, transport, attractions: ac } = getDayCost(dayItems);
+                        if (total === 0) return <p className="text-white/60 text-xs">Custos não informados</p>;
+                        return <p className="text-white/90 text-xs flex items-center justify-end gap-1 mt-0.5"><Banknote size={11} /> ~R${total} <span className="opacity-60">({ac > 0 ? `R$${ac} ingressos` : ''}{ac > 0 && transport > 0 ? ' + ' : ''}{transport > 0 ? `R$${transport} transporte` : ''})</span></p>;
+                      })()}
                     </div>
                   </div>
 
@@ -1057,17 +1192,45 @@ export default function TripDetailPage() {
                     );
                   })()}
 
-                  <div>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => handleDragEnd(e, dayItems)}>
                     {dayItems.length === 0 ? (
                       <p className="text-gray-500 p-6 text-center">Nenhuma atividade planejada para este dia</p>
+                    ) : isReordering ? (
+                      <SortableContext items={dayItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                        {dayItems.map((item, index) => {
+                          const attraction = attractions.find(a => a.id === item.attraction_id);
+                          const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || '';
+                          const durationH = attraction ? Math.floor(attraction.visit_duration_minutes / 60) : 0;
+                          const durationM = attraction ? attraction.visit_duration_minutes % 60 : 0;
+                          const durationStr = durationH > 0 ? `${durationH}h${durationM > 0 ? durationM + 'min' : ''}` : `${durationM}min`;
+                          return (
+                            <SortableItem key={item.id} id={item.id}>
+                              {(dragHandle) => (
+                                <div className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 bg-amber-50/40">
+                                  {dragHandle}
+                                  <div className="flex-shrink-0 w-7 h-7 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-sm">{index + 1}</div>
+                                  <CategoryIcon category={attraction?.category || ''} size={16} className="text-gray-400 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-gray-900 truncate text-sm">{attraction?.name || 'Atração'}</p>
+                                    <p className="text-xs text-gray-400">{categoryPt} • {durationStr}</p>
+                                  </div>
+                                  <select value={item.day_number} onChange={e => moveToDay(item, parseInt(e.target.value))} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700 flex-shrink-0">
+                                    {Array.from({ length: numDays }, (_, i) => i + 1).map(d => <option key={d} value={d}>Dia {d}</option>)}
+                                  </select>
+                                  <button onClick={() => deleteItem(item)} title="Remover" className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600 transition flex-shrink-0"><X size={14} /></button>
+                                </div>
+                              )}
+                            </SortableItem>
+                          );
+                        })}
+                      </SortableContext>
                     ) : (
                       dayItems.map((item, index) => {
                         const attraction = attractions.find(a => a.id === item.attraction_id);
                         const nextItem = dayItems[index + 1];
                         const nextAttraction = nextItem ? attractions.find(a => a.id === nextItem.attraction_id) : null;
-
-                        const icon = CATEGORY_ICONS[attraction?.category || ''] || '📍';
-                        const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || '';
+                        const isSearchMatch = !!(itinSearch && attraction?.name.toLowerCase().includes(itinSearch.toLowerCase()));
+                        const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || ''
                         const durationH = attraction ? Math.floor(attraction.visit_duration_minutes / 60) : 0;
                         const durationM = attraction ? attraction.visit_duration_minutes % 60 : 0;
                         const durationStr = durationH > 0
@@ -1133,49 +1296,10 @@ export default function TripDetailPage() {
 
                         return (
                           <div key={item.id}>
-                            {isReordering ? (
-                              <div className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 bg-amber-50/40">
-                                <div className="flex flex-col gap-0.5">
-                                  <button
-                                    onClick={() => moveWithinDay(item, 'up', dayItems)}
-                                    disabled={index === 0}
-                                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-25 disabled:cursor-not-allowed transition text-sm"
-                                  >↑</button>
-                                  <button
-                                    onClick={() => moveWithinDay(item, 'down', dayItems)}
-                                    disabled={index === dayItems.length - 1}
-                                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-25 disabled:cursor-not-allowed transition text-sm"
-                                  >↓</button>
-                                </div>
-                                <div className="flex-shrink-0 w-8 h-8 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-sm">
-                                  {index + 1}
-                                </div>
-                                <div className="text-xl flex-shrink-0">{icon}</div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900 truncate text-sm">{attraction?.name || 'Atração'}</p>
-                                  <p className="text-xs text-gray-400">{categoryPt} • ⏱ {durationStr}</p>
-                                </div>
-                                <select
-                                  value={item.day_number}
-                                  onChange={e => moveToDay(item, parseInt(e.target.value))}
-                                  className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700 flex-shrink-0"
-                                >
-                                  {Array.from({ length: numDays }, (_, i) => i + 1).map(d => (
-                                    <option key={d} value={d}>Dia {d}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  onClick={() => deleteItem(item)}
-                                  title="Remover"
-                                  className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600 transition flex-shrink-0"
-                                ><X size={14} /></button>
-                              </div>
-                            ) : (
                               <div
                                 className={`w-full flex items-center gap-2 sm:gap-4 px-4 sm:p-5 py-3 sm:py-4 border-b border-gray-100 last:border-0 transition ${
-                                  visited.has(item.attraction_id)
-                                    ? 'bg-green-50/60'
-                                    : 'hover:bg-teal-50/60'
+                                  isSearchMatch ? 'bg-brand-teal/5 ring-1 ring-inset ring-brand-teal/20' :
+                                  visited.has(item.attraction_id) ? 'bg-green-50/60' : 'hover:bg-teal-50/60'
                                 }`}
                               >
                                 <button
@@ -1215,7 +1339,14 @@ export default function TripDetailPage() {
                                     }`}>{attraction?.name || 'Atração'}</h4>
                                     <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
                                       {item.start_time && (
-                                        <span className="font-semibold text-brand-teal">🕐 {item.start_time.slice(0, 5)}</span>
+                                        <span className="font-semibold text-brand-teal flex items-center gap-0.5">
+                                          <Clock size={12} /> {item.start_time.slice(0, 5)}
+                                        </span>
+                                      )}
+                                      {item.start_time && hasHoursConflict(item.attraction_id, item.start_time, dayDate) && (
+                                        <span className="inline-flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 font-medium">
+                                          <AlertTriangle size={10} /> Horário
+                                        </span>
                                       )}
                                       <span>{categoryPt}</span>
                                       <span className="sm:hidden text-xs">⏱ {durationStr}</span>
@@ -1232,6 +1363,15 @@ export default function TripDetailPage() {
                                         return null;
                                       })()}
                                     </p>
+                                    {showCosts && (
+                                      <div className="flex items-center gap-1 mt-0.5" onClick={e => e.stopPropagation()}>
+                                        <Banknote size={11} className="text-gray-400 flex-shrink-0" />
+                                        <input type="number" min={0} step={5} placeholder="R$ ingresso"
+                                          value={attractionCosts[item.attraction_id] || ''}
+                                          onChange={e => setCost(item.attraction_id, Number(e.target.value) || 0)}
+                                          className="w-20 text-xs border border-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-brand-teal" />
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex-shrink-0 flex items-center gap-1.5">
                                     <span className="hidden sm:inline bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
@@ -1253,9 +1393,42 @@ export default function TripDetailPage() {
                                   </div>
                                 </button>
                               </div>
-                            )}
-                            {!isReordering && travelConnector}
-                            {!isReordering && attraction && (() => {
+                            {travelConnector}
+                            {attraction && (() => {
+                              const hours = attractionHours[item.attraction_id];
+                              const isExpHours = expandedHours.has(item.id);
+                              const conflict = hasHoursConflict(item.attraction_id, item.start_time, dayDate);
+                              return (
+                                <div className="ml-[52px] mr-4 my-0.5 print:hidden">
+                                  <button
+                                    onClick={() => setExpandedHours(prev => { const n = new Set(prev); isExpHours ? n.delete(item.id) : n.add(item.id); return n; })}
+                                    className={`text-xs flex items-center gap-1 ${conflict ? 'text-amber-600 font-medium' : 'text-gray-400 hover:text-brand-teal'}`}
+                                  >
+                                    {conflict && <AlertTriangle size={11} />}
+                                    <Clock size={11} />
+                                    {hours?.open ? `${hours.open} – ${hours.close}` : 'Definir horários'}
+                                  </button>
+                                  {isExpHours && (
+                                    <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <label className="text-xs text-gray-500">Abre:</label>
+                                        <input type="time" value={hours?.open || ''} onChange={e => updateAttrHours(item.attraction_id, 'open', e.target.value)} className="text-xs border border-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-brand-teal" />
+                                        <label className="text-xs text-gray-500">Fecha:</label>
+                                        <input type="time" value={hours?.close || ''} onChange={e => updateAttrHours(item.attraction_id, 'close', e.target.value)} className="text-xs border border-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-brand-teal" />
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs text-gray-500">Fechado:</span>
+                                        {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d, i) => (
+                                          <button key={i} onClick={() => toggleClosedDay(item.attraction_id, i)}
+                                            className={`text-xs px-1.5 py-0.5 rounded border transition ${(hours?.closedDays || []).includes(i) ? 'bg-red-100 text-red-600 border-red-200' : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}>{d}</button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                            {attraction && (() => {
                               const gems = hiddenGemsFor(attraction);
                               if (!gems.length) return null;
                               const key = item.id;
@@ -1296,7 +1469,7 @@ export default function TripDetailPage() {
                         );
                       })
                     )}
-                  </div>
+                  </DndContext>
 
                   {isReordering && (
                     <button
