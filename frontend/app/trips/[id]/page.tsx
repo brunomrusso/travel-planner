@@ -549,9 +549,9 @@ export default function TripDetailPage() {
     return attractions
       .filter(a => !inItin.has(a.id) && a.id !== attr.id)
       .map(a => ({ ...a, _dist: haversineKm(attr.latitude, attr.longitude, a.latitude, a.longitude) }))
-      .filter((a: any) => a._dist < 0.7)
+      .filter((a: any) => a._dist > 0.05 && a._dist < 0.7)
       .sort((a: any, b: any) => a._dist - b._dist)
-      .slice(0, 2);
+      .slice(0, 3);
   };
 
   const openDayTripModal = (dt: DayTrip, mainCity: string) => {
@@ -1166,7 +1166,14 @@ export default function TripDetailPage() {
                                             <p className="text-sm font-medium text-gray-800 truncate">{g.name}</p>
                                             <p className="text-xs text-gray-400">{CATEGORY_PT[g.category] || g.category} • {(g._dist * 1000).toFixed(0)}m</p>
                                           </div>
-                                          <a href={`https://www.google.com/maps/search/?api=1&query=${g.latitude},${g.longitude}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500"><MapPin size={14} /></a>
+                                          <a href={`https://www.google.com/maps/search/?api=1&query=${g.latitude},${g.longitude}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500 mr-1"><MapPin size={14} /></a>
+                                          <button
+                                            onClick={() => addAttractionToDay(g, dayIndex + 1)}
+                                            title="Adicionar ao roteiro deste dia"
+                                            className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-teal text-white flex items-center justify-center hover:bg-brand-teal-dark transition"
+                                          >
+                                            <Plus size={12} />
+                                          </button>
                                         </div>
                                       ))}
                                     </div>
