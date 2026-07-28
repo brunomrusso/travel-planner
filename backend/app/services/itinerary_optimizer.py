@@ -101,7 +101,7 @@ class ItineraryOptimizer:
                 if city_start_day <= d < city_start_day + city_days
             }
 
-            min_needed = city_days * 5
+            min_needed = city_days * 8   # request more so diversity pass has a wider pool
             await enrich_city_attractions(self.supabase, city, min_needed)
 
             resp = self.supabase.table("attractions").select("*").eq("city", city).execute()
@@ -170,6 +170,25 @@ class ItineraryOptimizer:
 
         # --- Separate restaurants/cafes from main sightseeing attractions ---
         RESTAURANT_CATS = {"restaurant", "cafe", "bar"}
+
+        # --- Category diversity pass ---
+        # Cap how many attractions of the same category enter the pool.
+        # With multi-profile trips (e.g., Cultural + Family + Adventure + Gastronomic),
+        # "museum" gets score=5 and would monopolise all slots.
+        # cap = max 1 per day of each category (e.g., 3 museums for a 3-day trip).
+        cat_cap = max(2, num_days)
+        cat_counts: Dict[str, int] = {}
+        diverse: List[Dict[str, Any]] = []
+        deferred: List[Dict[str, Any]] = []
+        for a in attractions:
+            cat = a.get("category", "").lower()
+            if cat_counts.get(cat, 0) < cat_cap:
+                diverse.append(a)
+                cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            else:
+                deferred.append(a)
+        # Append deferred so overflow slots still fill from the same category
+        attractions = diverse + deferred
 
         # Separate restaurants BEFORE applying the pool cap so that gastronomy/relax
         # profiles (which score restaurants highly) don't starve the main sightseeing pool.

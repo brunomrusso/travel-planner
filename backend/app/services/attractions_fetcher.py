@@ -356,13 +356,24 @@ async def enrich_city_attractions(supabase, city: str, min_needed: int) -> int:
     Fetches from OpenStreetMap and inserts new entries if below threshold.
     Returns total count after enrichment.
     """
-    existing_resp = supabase.table("attractions").select("name").eq("city", city).execute()
+    existing_resp = supabase.table("attractions").select("name, category").eq("city", city).execute()
     existing = existing_resp.data or []
     current_count = len(existing)
     print(f"[enrich] city='{city}' existing={current_count} min_needed={min_needed}")
 
     if current_count >= min_needed:
-        return current_count
+        # Check category diversity even when count is sufficient.
+        # If one category dominates (>65%), force re-enrichment to add variety.
+        from collections import Counter
+        cats = [r.get("category", "") for r in existing if r.get("category")]
+        if cats:
+            top_pct = max(Counter(cats).values()) / len(cats)
+            if top_pct > 0.65:
+                print(f"[enrich] poor diversity (top cat = {top_pct:.0%}) — forcing re-enrich for '{city}'")
+            else:
+                return current_count
+        else:
+            return current_count
 
     coords = await _geocode_city(city)
     if not coords:
