@@ -376,7 +376,7 @@ export default function TripDetailPage() {
     try { const s = localStorage.getItem(`ratings_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
   const [showFinancialSummary, setShowFinancialSummary] = useState(false);
-  const [accomSuggestions, setAccomSuggestions] = useState<Record<number, { name: string; address: string }[]>>({});
+  const [accomSuggestions, setAccomSuggestions] = useState<Record<number, { name: string; address: string; lat: number; lng: number }[]>>({});
   const accomTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -394,7 +394,7 @@ export default function TripDetailPage() {
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
-  const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string }>>(() => {
+  const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string; lat?: number; lng?: number }>>(() => {
     if (typeof window === 'undefined') return {};
     try {
       const saved = localStorage.getItem(`accommodation_${window.location.pathname.split('/').pop()}`);
@@ -614,7 +614,7 @@ export default function TripDetailPage() {
           `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=6&addressdetails=0`,
           { headers: { 'Accept-Language': 'pt-BR,pt', 'User-Agent': 'TravelPlanner/1.0' } }
         );
-        const data: { name?: string; display_name: string }[] = await res.json();
+        const data: { name?: string; display_name: string; lat: string; lon: string }[] = await res.json();
         setAccomSuggestions(prev => ({
           ...prev,
           [dayNum]: data
@@ -622,6 +622,8 @@ export default function TripDetailPage() {
             .map(r => ({
               name: r.name!,
               address: r.display_name.split(', ').slice(1, 4).join(', '),
+              lat: parseFloat(r.lat),
+              lng: parseFloat(r.lon),
             })),
         }));
       } catch {}
@@ -638,25 +640,33 @@ export default function TripDetailPage() {
 
   const optimizeDay = (dayItems: ItineraryItem[]) => {
     if (dayItems.length <= 2) return;
-    const first = dayItems[0];
-    const rest = [...dayItems.slice(1)];
-    const optimized: ItineraryItem[] = [first];
-    while (rest.length > 0) {
-      const last = optimized[optimized.length - 1];
-      const lastAttr = attractions.find(a => a.id === last.attraction_id);
-      if (!lastAttr) { optimized.push(...rest); break; }
+    const dayNum = dayItems[0].day_number;
+    const hotel = dayAccommodation[dayNum];
+    const remaining = [...dayItems];
+    const optimized: ItineraryItem[] = [];
+    let curLat: number, curLng: number;
+    if (hotel?.lat && hotel?.lng) {
+      curLat = hotel.lat; curLng = hotel.lng;
+    } else {
+      const firstAttr = attractions.find(a => a.id === remaining[0].attraction_id);
+      if (!firstAttr) return;
+      curLat = firstAttr.latitude; curLng = firstAttr.longitude;
+      optimized.push(remaining.shift()!);
+    }
+    while (remaining.length > 0) {
       let minDist = Infinity, minIdx = 0;
-      rest.forEach((item, idx) => {
+      remaining.forEach((item, idx) => {
         const attr = attractions.find(a => a.id === item.attraction_id);
         if (!attr) return;
-        const d = haversineKm(lastAttr.latitude, lastAttr.longitude, attr.latitude, attr.longitude);
+        const d = haversineKm(curLat, curLng, attr.latitude, attr.longitude);
         if (d < minDist) { minDist = d; minIdx = idx; }
       });
-      optimized.push(rest[minIdx]);
-      rest.splice(minIdx, 1);
+      const next = remaining.splice(minIdx, 1)[0];
+      optimized.push(next);
+      const na = attractions.find(a => a.id === next.attraction_id);
+      if (na) { curLat = na.latitude; curLng = na.longitude; }
     }
     const reordered = optimized.map((item, idx) => ({ ...item, order_in_day: idx + 1 }));
-    const dayNum = dayItems[0].day_number;
     setItinerary(prev => prev.filter(i => i.day_number !== dayNum).concat(reordered).sort((a, b) => a.day_number - b.day_number || a.order_in_day - b.order_in_day));
     persistReorder(reordered);
   };
@@ -779,6 +789,13 @@ export default function TripDetailPage() {
     const updated = { ...dayAccommodation, [day]: { ...current, [field]: value } };
     setDayAccommodation(updated);
     localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
+  };
+
+  const pickAccommodation = (day: number, s: { name: string; address: string; lat: number; lng: number }) => {
+    const updated = { ...dayAccommodation, [day]: { name: s.name, address: s.address, lat: s.lat, lng: s.lng } };
+    setDayAccommodation(updated);
+    localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
+    setAccomSuggestions(prev => ({ ...prev, [day]: [] }));
   };
 
   const openAddModal = async (day: number) => {
@@ -1476,6 +1493,32 @@ export default function TripDetailPage() {
                           ? `${durationH}h${durationM > 0 ? durationM + 'min' : ''}`
                           : `${durationM}min`;
 
+                        const hotel = dayAccommodation[dayIndex + 1];
+                        const fmtMin = (m: number) => m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}min` : ''}`;
+                        const hotelConnectorBefore = index === 0 && hotel?.lat && hotel?.lng && attraction ? (() => {
+                          const d = haversineKm(hotel.lat!, hotel.lng!, attraction.latitude, attraction.longitude);
+                          const mode = d < 1 ? 'a pé' : d < 3.5 ? 'de ônibus' : 'de táxi';
+                          return (
+                            <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-200 ml-[28px]">
+                              <BedDouble size={11} className="text-blue-400 shrink-0" />
+                              <span className="text-xs text-blue-500">
+                                Saindo do hotel • {d.toFixed(1)} km {mode} • ~{fmtMin(Math.round((d / (d < 1 ? 5 : d < 3.5 ? 20 : 40)) * 60))}
+                              </span>
+                            </div>
+                          );
+                        })() : null;
+                        const hotelConnectorAfter = index === dayItems.length - 1 && hotel?.lat && hotel?.lng && attraction ? (() => {
+                          const d = haversineKm(attraction.latitude, attraction.longitude, hotel.lat!, hotel.lng!);
+                          const mode = d < 1 ? 'a pé' : d < 3.5 ? 'de ônibus' : 'de táxi';
+                          return (
+                            <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-200 ml-[28px]">
+                              <BedDouble size={11} className="text-blue-400 shrink-0" />
+                              <span className="text-xs text-blue-500">
+                                Retorno ao hotel • {d.toFixed(1)} km {mode} • ~{fmtMin(Math.round((d / (d < 1 ? 5 : d < 3.5 ? 20 : 40)) * 60))}
+                              </span>
+                            </div>
+                          );
+                        })() : null;
                         let travelConnector = null;
                         if (attraction && nextAttraction) {
                           const distKm = haversineKm(attraction.latitude, attraction.longitude, nextAttraction.latitude, nextAttraction.longitude);
@@ -1535,6 +1578,7 @@ export default function TripDetailPage() {
 
                         return (
                           <div key={item.id}>
+                            {hotelConnectorBefore}
                               <div
                                 className={`w-full flex items-center gap-2 sm:gap-4 px-4 sm:p-5 py-3 sm:py-4 border-b border-gray-100 last:border-0 transition ${
                                   isSearchMatch ? 'bg-brand-teal/5 ring-1 ring-inset ring-brand-teal/20' :
@@ -1652,6 +1696,7 @@ export default function TripDetailPage() {
                               </div>
                             )}
                             {travelConnector}
+                            {hotelConnectorAfter}
                             {attraction && (() => {
                               const hours = attractionHours[item.attraction_id];
                               const isExpHours = expandedHours.has(item.id);
@@ -1738,9 +1783,16 @@ export default function TripDetailPage() {
                     </button>
                   )}
 
-                  {dayPoints.length > 0 && (
+                  {(dayPoints.length > 0 || dayAccommodation[dayIndex + 1]?.lat) && (
                     <div className="border-t border-gray-100">
-                      <ItineraryMap points={dayPoints} />
+                      <ItineraryMap
+                        points={dayPoints}
+                        hotelPoint={dayAccommodation[dayIndex + 1]?.lat ? {
+                          lat: dayAccommodation[dayIndex + 1].lat!,
+                          lng: dayAccommodation[dayIndex + 1].lng!,
+                          name: dayAccommodation[dayIndex + 1].name,
+                        } : undefined}
+                      />
                     </div>
                   )}
 
@@ -1773,11 +1825,7 @@ export default function TripDetailPage() {
                           <button
                             key={si}
                             type="button"
-                            onMouseDown={() => {
-                              updateAccommodation(dayIndex + 1, 'name', s.name);
-                              updateAccommodation(dayIndex + 1, 'address', s.address);
-                              setAccomSuggestions(prev => ({ ...prev, [dayIndex + 1]: [] }));
-                            }}
+                            onMouseDown={() => pickAccommodation(dayIndex + 1, s)}
                             className="w-full text-left px-3 py-2 hover:bg-teal-50/60 transition"
                           >
                             <p className="text-sm font-medium text-gray-800 truncate">{s.name}</p>

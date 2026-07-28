@@ -35,10 +35,26 @@ function FitBounds({ points }: { points: MapPoint[] }) {
   return null;
 }
 
-export default function ItineraryMap({ points }: { points: MapPoint[] }) {
-  if (points.length === 0) return null;
-  const center: [number, number] = [points[0].lat, points[0].lng];
-  const line = points.map((p) => [p.lat, p.lng] as [number, number]);
+function hotelIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:#2563eb;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">H</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
+  });
+}
+
+export default function ItineraryMap({ points, hotelPoint }: { points: MapPoint[]; hotelPoint?: { lat: number; lng: number; name: string } }) {
+  if (points.length === 0 && !hotelPoint) return null;
+  const allPoints: MapPoint[] = [
+    ...(hotelPoint ? [{ ...hotelPoint, order: 0 }] : []),
+    ...points,
+  ];
+  const center: [number, number] = [allPoints[0].lat, allPoints[0].lng];
+  const line: [number, number][] = hotelPoint
+    ? [[hotelPoint.lat, hotelPoint.lng], ...points.map(p => [p.lat, p.lng] as [number, number]), [hotelPoint.lat, hotelPoint.lng]]
+    : points.map(p => [p.lat, p.lng] as [number, number]);
 
   return (
     <MapContainer
@@ -52,16 +68,17 @@ export default function ItineraryMap({ points }: { points: MapPoint[] }) {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <Polyline positions={line} pathOptions={{ color: '#0d9488', weight: 3, dashArray: '6 8' }} />
+      {hotelPoint && (
+        <Marker position={[hotelPoint.lat, hotelPoint.lng]} icon={hotelIcon()}>
+          <Popup><strong>🏨 {hotelPoint.name}</strong></Popup>
+        </Marker>
+      )}
       {points.map((p, i) => (
         <Marker key={i} position={[p.lat, p.lng]} icon={numberedIcon(p.order)}>
-          <Popup>
-            <strong>
-              {p.order}. {p.name}
-            </strong>
-          </Popup>
+          <Popup><strong>{p.order}. {p.name}</strong></Popup>
         </Marker>
       ))}
-      <FitBounds points={points} />
+      <FitBounds points={allPoints} />
     </MapContainer>
   );
 }
