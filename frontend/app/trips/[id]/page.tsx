@@ -144,6 +144,14 @@ const CITY_ALIASES: Record<string, string> = {
   'viena': 'vienna',
 };
 
+const TRAVELER_PROFILES = [
+  { value: 'adventure', label: '🏔️ Aventura', description: 'Trilhas, natureza, atividades ao ar livre' },
+  { value: 'cultural', label: '🏛️ Cultural', description: 'Museus, galerias, sítios históricos' },
+  { value: 'gastronomic', label: '🍽️ Gastronômico', description: 'Restaurantes, cafés, mercados' },
+  { value: 'relax', label: '🏖️ Relaxamento', description: 'Praias, spas, parques' },
+  { value: 'family', label: '👨‍👩‍👧‍👦 Família', description: 'Atrações para crianças, entretenimento' },
+];
+
 const PHYSICAL_PROFILES: { id: string; label: string; warn: string; categories: string[] }[] = [
   { id: 'reduced_mobility', label: 'Mobilidade reduzida', warn: 'Pode ter dificuldade de acesso', categories: ['hiking', 'beach', 'park', 'zoo'] },
   { id: 'children', label: 'Crianças pequenas', warn: 'Pode não ser adequado para crianças', categories: ['monument', 'gallery', 'museum'] },
@@ -353,6 +361,8 @@ export default function TripDetailPage() {
   const [showPackingList, setShowPackingList] = useState(false);
   const [packingChecked, setPackingChecked] = useState<Set<string>>(new Set());
   const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
+  const [editProfiles, setEditProfiles] = useState<string[]>([]);
+  const [showEditProfiles, setShowEditProfiles] = useState(false);
   const [showDayTrips, setShowDayTrips] = useState(true);
   const [dayTripModal, setDayTripModal] = useState<{ trip: DayTrip; mainCity: string; smartDay: number } | null>(null);
   const [dayTripDay, setDayTripDay] = useState(1);
@@ -422,6 +432,7 @@ export default function TripDetailPage() {
           { headers }
         );
         setTrip(tripResponse.data);
+        setEditProfiles((tripResponse.data.traveler_profile || '').split(',').filter(Boolean));
         setIsLoading(false);
 
         const tripDests: DestinationCity[] = tripResponse.data.destinations || [{ city: tripResponse.data.destination_city, country: '', country_code: '' }];
@@ -648,12 +659,11 @@ export default function TripDetailPage() {
           ...prev,
           [dayNum]: data
             .filter(r => r.name)
-            .map(r => ({
-              name: r.name!,
-              address: r.display_name.split(', ').slice(1, 4).join(', '),
-              lat: parseFloat(r.lat),
-              lng: parseFloat(r.lon),
-            })),
+            .map(r => {
+              const genericTypes = new Set(['hotel', 'hostel', 'motel', 'pousada', 'albergue', 'inn', 'airbnb']);
+              const name = genericTypes.has(r.name!.toLowerCase()) ? r.display_name.split(', ')[0] : r.name!;
+              return { name, address: r.display_name.split(', ').slice(1, 4).join(', '), lat: parseFloat(r.lat), lng: parseFloat(r.lon) };
+            }),
         }));
       } catch {}
     }, 500);
@@ -1017,6 +1027,15 @@ export default function TripDetailPage() {
     setGenerateError('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
+      const currentProfiles = editProfiles.length > 0 ? editProfiles : (trip?.traveler_profile || '').split(',').filter(Boolean);
+      if (trip && currentProfiles.join(',') !== trip.traveler_profile) {
+        await axios.put(
+          `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}`,
+          { traveler_profile: currentProfiles.join(',') },
+          { headers }
+        );
+        setTrip(prev => prev ? { ...prev, traveler_profile: currentProfiles.join(',') } : prev);
+      }
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/generate-itinerary`,
         {},
@@ -1183,9 +1202,26 @@ export default function TripDetailPage() {
             <Map size={64} className="mx-auto mb-4 text-gray-300" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Seu roteiro está pronto para ser criado!</h2>
             <p className="text-gray-500 mb-6">Vamos montar um itinerário personalizado para {trip.destination_city} com base no seu perfil de viagem.</p>
+            {/* Profile selector */}
+            <div className="mb-6 w-full">
+              <p className="text-sm text-gray-500 mb-3 text-left">Perfil do viajante — selecione um ou mais:</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {TRAVELER_PROFILES.map(p => {
+                  const sel = editProfiles.includes(p.value);
+                  return (
+                    <button key={p.value} type="button" onClick={() => setEditProfiles(prev => sel ? prev.filter(x => x !== p.value) : [...prev, p.value])}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition font-medium ${
+                        sel ? 'border-brand-teal bg-brand-teal-light text-brand-teal' : 'border-gray-200 text-gray-500 hover:border-brand-teal'
+                      }`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button
               onClick={handleGenerateItinerary}
-              disabled={isGenerating}
+              disabled={isGenerating || editProfiles.length === 0}
               className="bg-brand-orange text-white px-10 py-4 rounded-xl hover:bg-brand-orange-dark font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition inline-flex items-center gap-2"
             >
               {isGenerating ? (
@@ -1197,19 +1233,45 @@ export default function TripDetailPage() {
             </button>
           </div>
         ) : (
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={handleGenerateItinerary}
-              disabled={isGenerating}
-              className="text-sm text-gray-500 hover:text-brand-orange border border-gray-300 hover:border-brand-orange px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {isGenerating ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
-                  Regenerando...
-                </>
-              ) : <><RefreshCw size={14} /> Regenerar Roteiro</>}
-            </button>
+          <div className="flex flex-col items-end gap-2 mb-4 print:hidden">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditProfiles(v => !v)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition ${
+                  showEditProfiles ? 'border-brand-teal bg-brand-teal-light text-brand-teal' : 'border-gray-200 text-gray-500 hover:border-brand-teal'
+                }`}
+              >
+                🎯 Perfis: {editProfiles.map(p => TRAVELER_PROFILES.find(x => x.value === p)?.label || p).join(', ') || 'nenhum'}
+              </button>
+              <button
+                onClick={handleGenerateItinerary}
+                disabled={isGenerating}
+                className="text-sm text-gray-500 hover:text-brand-orange border border-gray-300 hover:border-brand-orange px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <span className="inline-block w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
+                    Regenerando...
+                  </>
+                ) : <><RefreshCw size={14} /> Regenerar Roteiro</>}
+              </button>
+            </div>
+            {showEditProfiles && (
+              <div className="flex flex-wrap gap-1.5 justify-end">
+                {TRAVELER_PROFILES.map(p => {
+                  const sel = editProfiles.includes(p.value);
+                  return (
+                    <button key={p.value} type="button" onClick={() => setEditProfiles(prev => sel ? prev.filter(x => x !== p.value) : [...prev, p.value])}
+                      className={`px-3 py-1 rounded-full text-xs border transition ${
+                        sel ? 'border-brand-teal bg-brand-teal-light text-brand-teal font-medium' : 'border-gray-200 text-gray-400 hover:border-brand-teal'
+                      }`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
