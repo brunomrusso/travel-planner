@@ -170,18 +170,24 @@ class ItineraryOptimizer:
 
         # --- Separate restaurants/cafes from main sightseeing attractions ---
         RESTAURANT_CATS = {"restaurant", "cafe", "bar"}
-        all_pool = attractions[: MAX_PER_DAY * num_days]
-        main_pool = [a for a in all_pool if a.get("category", "").lower() not in RESTAURANT_CATS]
-        resto_pool = [a for a in all_pool if a.get("category", "").lower() in RESTAURANT_CATS]
+
+        # Separate restaurants BEFORE applying the pool cap so that gastronomy/relax
+        # profiles (which score restaurants highly) don't starve the main sightseeing pool.
+        main_all = [a for a in attractions if a.get("category", "").lower() not in RESTAURANT_CATS]
+        resto_all = [a for a in attractions if a.get("category", "").lower() in RESTAURANT_CATS]
+
+        main_pool = main_all[: MAX_PER_DAY * num_days]
+        resto_pool = resto_all[: num_days * 2]   # at most 2 restaurants per day
 
         # Fallback: if only restaurants in DB, treat them as main
         if not main_pool:
-            main_pool = all_pool
+            main_pool = attractions[: MAX_PER_DAY * num_days]
             resto_pool = []
 
         n = len(main_pool)
-        # k ≤ floor(n / MIN_PER_DAY) ensures each cluster has ≥ MIN_PER_DAY attractions on average
-        k = max(1, min(num_days, n // MIN_PER_DAY))
+        # Allow k = num_days as long as there is at least 1 main attraction per day.
+        # Only reduce k when the DB truly doesn't have enough attractions.
+        k = min(num_days, max(1, n))
 
         coords = [(a["latitude"], a["longitude"]) for a in main_pool]
 
