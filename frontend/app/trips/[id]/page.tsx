@@ -1162,39 +1162,17 @@ export default function TripDetailPage() {
         {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
+            <div className="flex items-start justify-between flex-wrap gap-y-2 print:hidden">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList size={22} /> Roteiro de Viagem</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setPackingChecked(new Set()); setShowPackingList(true); }}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                  title="Lista de bagagem"
-                >
-                  <Package size={14} className="inline mr-1" /> Bagagem
-                </button>
-                <button
-                  onClick={exportToICal}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                  title="Exportar para Google/Apple Calendar (.ics)"
-                >
-                  <CalendarPlus size={14} className="inline mr-1" />iCal
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                  title="Imprimir"
-                >
-                  <Printer size={14} className="inline mr-1" /> Imprimir
-                </button>
+              <div className="flex flex-wrap gap-1.5 justify-end">
+                {/* Primary row: always visible */}
                 <button
                   onClick={() => setIsReordering(r => !r)}
-                  className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
-                    isReordering
-                      ? 'bg-brand-teal text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                    isReordering ? 'bg-brand-teal text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {isReordering ? <><Check size={14} className="inline mr-1" />Concluir</> : <><ArrowUpDown size={14} className="inline mr-1" />Reorganizar</>}
+                  {isReordering ? <><Check size={14} className="inline mr-1" /><span className="hidden sm:inline">Concluir</span></> : <><ArrowUpDown size={14} className="inline mr-1" /><span className="hidden sm:inline">Reorganizar</span></>}
                 </button>
                 <button
                   onClick={() => setShowCosts(v => !v)}
@@ -1203,7 +1181,7 @@ export default function TripDetailPage() {
                   }`}
                   title="Estimativa de custos"
                 >
-                  <Banknote size={14} className="inline mr-1" />Custos
+                  <Banknote size={14} className="inline mr-1" /><span className="hidden sm:inline">Custos</span>
                 </button>
                 <button
                   onClick={() => setShowFinancialSummary(v => !v)}
@@ -1212,7 +1190,7 @@ export default function TripDetailPage() {
                   }`}
                   title="Resumo financeiro"
                 >
-                  <Receipt size={14} className="inline mr-1" />Resumo
+                  <Receipt size={14} className="inline mr-1" /><span className="hidden sm:inline">Resumo</span>
                 </button>
                 <button
                   onClick={() => setShowProfileModal(v => !v)}
@@ -1221,7 +1199,29 @@ export default function TripDetailPage() {
                   }`}
                   title="Perfil do viajante"
                 >
-                  <User size={14} className="inline mr-1" />Perfil
+                  <User size={14} className="inline mr-1" /><span className="hidden sm:inline">Perfil</span>
+                </button>
+                {/* Secondary: icon-only on mobile */}
+                <button
+                  onClick={() => { setPackingChecked(new Set()); setShowPackingList(true); }}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Lista de bagagem"
+                >
+                  <Package size={14} className="inline" /><span className="hidden sm:inline ml-1">Bagagem</span>
+                </button>
+                <button
+                  onClick={exportToICal}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Exportar para Google/Apple Calendar (.ics)"
+                >
+                  <CalendarPlus size={14} className="inline" /><span className="hidden sm:inline ml-1">iCal</span>
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Imprimir"
+                >
+                  <Printer size={14} className="inline" /><span className="hidden sm:inline ml-1">Imprimir</span>
                 </button>
               </div>
             </div>
@@ -1279,6 +1279,17 @@ export default function TripDetailPage() {
                 <p className="text-teal-800 text-sm leading-relaxed">{tips.overview}</p>
               </div>
             )}
+            {itinSearch && !itineraryByDay.some(dayItems => dayItems.some(item => {
+              const attr = attractions.find(a => a.id === item.attraction_id);
+              const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return attr ? norm(attr.name).includes(norm(itinSearch)) : false;
+            })) && (
+              <div className="text-center py-8 text-gray-400 bg-white rounded-xl shadow-sm">
+                <Search size={32} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Nenhuma atra\u00e7\u00e3o encontrada para &ldquo;<span className="font-medium text-gray-600">{itinSearch}</span>&rdquo;</p>
+                <button onClick={() => setItinSearch('')} className="mt-2 text-xs text-brand-teal hover:underline">Limpar busca</button>
+              </div>
+            )}
             {itineraryByDay.map((dayItems, dayIndex) => {
               const dayDate = new Date(trip.start_date + 'T12:00:00');
               dayDate.setDate(dayDate.getDate() + dayIndex);
@@ -1295,10 +1306,11 @@ export default function TripDetailPage() {
                 })
                 .filter((p): p is { lat: number; lng: number; name: string; order: number } => p !== null);
 
-              // Search filter
+              // Search filter — normalize accents for Portuguese/international names
+              const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
               const dayHasMatch = !itinSearch || dayItems.some(item => {
                 const attr = attractions.find(a => a.id === item.attraction_id);
-                return attr?.name.toLowerCase().includes(itinSearch.toLowerCase());
+                return attr ? norm(attr.name).includes(norm(itinSearch)) : false;
               });
               if (itinSearch && !dayHasMatch) return null;
 
@@ -1425,7 +1437,8 @@ export default function TripDetailPage() {
                         const attraction = attractions.find(a => a.id === item.attraction_id);
                         const nextItem = dayItems[index + 1];
                         const nextAttraction = nextItem ? attractions.find(a => a.id === nextItem.attraction_id) : null;
-                        const isSearchMatch = !!(itinSearch && attraction?.name.toLowerCase().includes(itinSearch.toLowerCase()));
+                        const norm2 = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        const isSearchMatch = !!(itinSearch && attraction && norm2(attraction.name).includes(norm2(itinSearch)));
                         const categoryPt = CATEGORY_PT[attraction?.category || ''] || attraction?.category || ''
                         const durationH = attraction ? Math.floor(attraction.visit_duration_minutes / 60) : 0;
                         const durationM = attraction ? attraction.visit_duration_minutes % 60 : 0;
