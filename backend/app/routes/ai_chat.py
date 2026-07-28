@@ -34,7 +34,9 @@ def _build_adjust_prompt(trip: dict, itinerary_str: str) -> str:
         '{"reply": "...", "action": {"type": "move", "attraction_name": "nome EXATO", "target_day": 2}}\n'
         "Se não entender ou não for possível: "
         '{"reply": "Não consegui entender. Pode especificar qual atração e o que deseja fazer?", "action": null}\n'
-        "IMPORTANTE: os nomes devem ser EXATAMENTE como aparecem no roteiro. Responda apenas com JSON."
+        "Para adicionar uma atração por tema/categoria use: "
+        '{"reply": "...", "action": {"type": "add", "category": "museum", "target_day": 2, "name_hint": "arte moderna"}}\n'
+        "IMPORTANTE: para remove/move os nomes devem ser EXATAMENTE como no roteiro. Responda apenas com JSON."
     )
 
 

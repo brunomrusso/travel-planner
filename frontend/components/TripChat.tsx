@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { X, Send, MessageCircle, Bot, Wand2, Check, Trash2, MoveRight } from 'lucide-react';
+import { X, Send, MessageCircle, Bot, Wand2, Check, Trash2, MoveRight, Plus } from 'lucide-react';
 
 interface AdjustAction {
-  type: 'remove' | 'move';
+  type: 'remove' | 'move' | 'add';
   attraction_name?: string;
   target_day?: number;
+  category?: string;
+  name_hint?: string;
 }
 
 interface Message {
@@ -18,9 +20,11 @@ interface Message {
 }
 
 export interface ItineraryAction {
-  type: 'remove' | 'move';
-  attraction_name: string;
+  type: 'remove' | 'move' | 'add';
+  attraction_name?: string;
   target_day?: number;
+  category?: string;
+  name_hint?: string;
 }
 
 interface TripChatProps {
@@ -48,7 +52,10 @@ const ADJUST_KEYWORDS = ['remov', 'mov', 'troc', 'mud', 'cancel', 'tira', 'coloc
 
 export default function TripChat({ tripId, city, token, itinerarySummary, onItineraryAction }: TripChatProps) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try { const s = localStorage.getItem(`chat_${tripId}`); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -63,6 +70,12 @@ export default function TripChat({ tripId, city, token, itinerarySummary, onItin
       }]);
     }
   }, [open, city, messages.length]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      try { localStorage.setItem(`chat_${tripId}`, JSON.stringify(messages.slice(-30))); } catch {}
+    }
+  }, [messages, tripId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -108,8 +121,13 @@ export default function TripChat({ tripId, city, token, itinerarySummary, onItin
   };
 
   const applyAction = (action: AdjustAction, msgIdx: number) => {
-    if (!onItineraryAction || !action.attraction_name) return;
-    onItineraryAction({ type: action.type, attraction_name: action.attraction_name, target_day: action.target_day }, msgIdx);
+    if (!onItineraryAction) return;
+    if (action.type === 'add') {
+      onItineraryAction({ type: 'add', target_day: action.target_day, category: action.category, name_hint: action.name_hint }, msgIdx);
+    } else {
+      if (!action.attraction_name) return;
+      onItineraryAction({ type: action.type, attraction_name: action.attraction_name, target_day: action.target_day }, msgIdx);
+    }
     setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, actionApplied: true } : m));
   };
 
@@ -163,8 +181,8 @@ export default function TripChat({ tripId, city, token, itinerarySummary, onItin
                           onClick={() => applyAction(msg.action!, i)}
                           className="flex items-center gap-1 text-xs bg-brand-teal text-white px-2.5 py-1 rounded-full hover:bg-brand-teal-dark transition"
                         >
-                          {msg.action.type === 'remove' ? <Trash2 size={11} /> : <MoveRight size={11} />}
-                          {msg.action.type === 'remove' ? 'Confirmar remoção' : `Mover para Dia ${msg.action.target_day}`}
+                          {msg.action.type === 'remove' ? <Trash2 size={11} /> : msg.action.type === 'add' ? <Plus size={11} /> : <MoveRight size={11} />}
+                          {msg.action.type === 'remove' ? 'Confirmar remoção' : msg.action.type === 'add' ? `Adicionar ao Dia ${msg.action.target_day || 1}` : `Mover para Dia ${msg.action.target_day}`}
                         </button>
                         <button
                           onClick={() => setMessages(prev => prev.map((m, idx) => idx === i ? { ...m, action: null } : m))}

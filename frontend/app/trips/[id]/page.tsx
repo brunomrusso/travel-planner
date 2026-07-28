@@ -13,7 +13,7 @@ import TripChat, { type ItineraryAction } from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, Banknote, GripVertical, type LucideIcon } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, Banknote, GripVertical, Star, CalendarPlus, Route, Receipt, Download, type LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -371,6 +371,11 @@ export default function TripDetailPage() {
     try { const s = localStorage.getItem(`hours_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
   const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
+  const [attractionRatings, setAttractionRatings] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { const s = localStorage.getItem(`ratings_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+  const [showFinancialSummary, setShowFinancialSummary] = useState(false);
   const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try { const s = localStorage.getItem(`physical_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : []; } catch { return []; }
@@ -567,17 +572,109 @@ export default function TripDetailPage() {
   };
 
   const handleItineraryAction = (action: ItineraryAction) => {
-    const lowerName = action.attraction_name.toLowerCase().trim();
+    if (action.type === 'add') {
+      const dayNum = action.target_day || 1;
+      const scheduled = new Set(itinerary.map(i => i.attraction_id));
+      const candidates = attractions.filter(a => !scheduled.has(a.id));
+      let best = candidates[0];
+      if (action.category) {
+        const cm = candidates.find(a => a.category === action.category);
+        if (cm) best = cm;
+      }
+      if (action.name_hint && candidates.length > 0) {
+        const hm = candidates.find(a => a.name.toLowerCase().includes(action.name_hint!.toLowerCase()));
+        if (hm) best = hm;
+      }
+      if (best) addAttractionToDay(best, dayNum);
+      return;
+    }
+    const lowerName = (action.attraction_name || '').toLowerCase().trim();
     const match = itinerary.find(item => {
       const attr = attractions.find(a => a.id === item.attraction_id);
       return attr?.name.toLowerCase().trim() === lowerName;
     });
     if (!match) return;
-    if (action.type === 'remove') {
-      deleteItem(match);
-    } else if (action.type === 'move' && action.target_day) {
-      moveToDay(match, action.target_day);
+    if (action.type === 'remove') deleteItem(match);
+    else if (action.type === 'move' && action.target_day) moveToDay(match, action.target_day);
+  };
+
+  const setRating = (attrId: string, rating: number) => {
+    setAttractionRatings(prev => {
+      const next = { ...prev, [attrId]: rating };
+      try { localStorage.setItem(`ratings_${tripId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const optimizeDay = (dayItems: ItineraryItem[]) => {
+    if (dayItems.length <= 2) return;
+    const first = dayItems[0];
+    const rest = [...dayItems.slice(1)];
+    const optimized: ItineraryItem[] = [first];
+    while (rest.length > 0) {
+      const last = optimized[optimized.length - 1];
+      const lastAttr = attractions.find(a => a.id === last.attraction_id);
+      if (!lastAttr) { optimized.push(...rest); break; }
+      let minDist = Infinity, minIdx = 0;
+      rest.forEach((item, idx) => {
+        const attr = attractions.find(a => a.id === item.attraction_id);
+        if (!attr) return;
+        const d = haversineKm(lastAttr.latitude, lastAttr.longitude, attr.latitude, attr.longitude);
+        if (d < minDist) { minDist = d; minIdx = idx; }
+      });
+      optimized.push(rest[minIdx]);
+      rest.splice(minIdx, 1);
     }
+    const reordered = optimized.map((item, idx) => ({ ...item, order_in_day: idx + 1 }));
+    const dayNum = dayItems[0].day_number;
+    setItinerary(prev => prev.filter(i => i.day_number !== dayNum).concat(reordered).sort((a, b) => a.day_number - b.day_number || a.order_in_day - b.order_in_day));
+    persistReorder(reordered);
+  };
+
+  const exportToICal = () => {
+    if (!trip) return;
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TravelPlanner//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    const base = new Date(trip.start_date + 'T12:00:00');
+    [...itinerary].sort((a, b) => a.day_number - b.day_number || a.order_in_day - b.order_in_day).forEach(item => {
+      const attr = attractions.find(a => a.id === item.attraction_id);
+      if (!attr) return;
+      const d = new Date(base);
+      d.setDate(d.getDate() + item.day_number - 1);
+      const sh = item.start_time ? parseInt(item.start_time.slice(0, 2)) : 9;
+      const sm = item.start_time ? parseInt(item.start_time.slice(3, 5)) : 0;
+      d.setHours(sh, sm, 0, 0);
+      const end = new Date(d.getTime() + (attr.visit_duration_minutes || 60) * 60000);
+      const fmt = (dt: Date) => dt.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+      lines.push('BEGIN:VEVENT',
+        `UID:${item.id}@travelplanner`,
+        `DTSTART:${fmt(d)}`, `DTEND:${fmt(end)}`,
+        `SUMMARY:${attr.name}`,
+        attr.address ? `LOCATION:${attr.address.replace(/[,\n]/g, ' ')}` : `LOCATION:${attr.latitude},${attr.longitude}`,
+        `DESCRIPTION:Dia ${item.day_number} \u2022 ${CATEGORY_PT[attr.category] || attr.category}`,
+        'END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${trip.destination_city.replace(/\s+/g, '_')}_roteiro.ics`; a.click();
+  };
+
+  const exportCostsCSV = () => {
+    if (!trip) return;
+    const rows: string[][] = [['Dia', 'Atração', 'Categoria', 'Ingresso (R$)', 'Avaliação']];
+    [...itinerary].sort((a, b) => a.day_number - b.day_number || a.order_in_day - b.order_in_day).forEach(item => {
+      const attr = attractions.find(a => a.id === item.attraction_id);
+      if (!attr) return;
+      rows.push([String(item.day_number), attr.name, CATEGORY_PT[attr.category] || attr.category,
+        String(attractionCosts[item.attraction_id] || 0),
+        attractionRatings[item.attraction_id] ? `${attractionRatings[item.attraction_id]}/5` : '']);
+    });
+    const grand = Object.values(attractionCosts).reduce((s, v) => s + v, 0);
+    rows.push(['', 'TOTAL', '', String(grand), '']);
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${trip.destination_city.replace(/\s+/g, '_')}_custos.csv`; a.click();
   };
 
   const setCost = (attrId: string, cost: number) => {
@@ -1076,11 +1173,18 @@ export default function TripDetailPage() {
                   <Package size={14} className="inline mr-1" /> Bagagem
                 </button>
                 <button
+                  onClick={exportToICal}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  title="Exportar para Google/Apple Calendar (.ics)"
+                >
+                  <CalendarPlus size={14} className="inline mr-1" />iCal
+                </button>
+                <button
                   onClick={() => window.print()}
                   className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                  title="Exportar / Imprimir"
+                  title="Imprimir"
                 >
-                  <Printer size={14} className="inline mr-1" /> Exportar
+                  <Printer size={14} className="inline mr-1" /> Imprimir
                 </button>
                 <button
                   onClick={() => setIsReordering(r => !r)}
@@ -1100,6 +1204,15 @@ export default function TripDetailPage() {
                   title="Estimativa de custos"
                 >
                   <Banknote size={14} className="inline mr-1" />Custos
+                </button>
+                <button
+                  onClick={() => setShowFinancialSummary(v => !v)}
+                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                    showFinancialSummary ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title="Resumo financeiro"
+                >
+                  <Receipt size={14} className="inline mr-1" />Resumo
                 </button>
                 <button
                   onClick={() => setShowProfileModal(v => !v)}
@@ -1230,8 +1343,19 @@ export default function TripDetailPage() {
                       </h3>
                       <p className="text-white/80 text-sm capitalize">{dayLabel}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white font-semibold">{dayItems.length} {dayItems.length === 1 ? 'atração' : 'atrações'}</p>
+                    <div className="text-right flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        {dayItems.length >= 3 && !isReordering && (
+                          <button
+                            onClick={() => optimizeDay(dayItems)}
+                            title="Otimizar ordem por proximidade"
+                            className="flex items-center gap-1 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-1 rounded-lg transition"
+                          >
+                            <Route size={12} /> Otimizar
+                          </button>
+                        )}
+                        <p className="text-white font-semibold">{dayItems.length} {dayItems.length === 1 ? 'atração' : 'atrações'}</p>
+                      </div>
                       {dayDuration > 0 && <p className="text-white/80 text-sm">~{Math.round(dayDuration / 60)}h de atividades</p>}
                       {showCosts && (() => {
                         const { total, transport, attractions: ac } = getDayCost(dayItems);
@@ -1473,6 +1597,17 @@ export default function TripDetailPage() {
                                   </div>
                                 </button>
                               </div>
+                            {visited.has(item.attraction_id) && (
+                              <div className="flex items-center gap-1 ml-[52px] px-1 py-0.5 print:hidden" onClick={e => e.stopPropagation()}>
+                                {[1,2,3,4,5].map(star => (
+                                  <button key={star} onClick={() => setRating(item.attraction_id, attractionRatings[item.attraction_id] === star ? 0 : star)}>
+                                    <Star size={13} fill={star <= (attractionRatings[item.attraction_id] || 0) ? 'currentColor' : 'none'}
+                                      className={star <= (attractionRatings[item.attraction_id] || 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300 transition'} />
+                                  </button>
+                                ))}
+                                <span className="text-xs text-gray-300 ml-0.5">{attractionRatings[item.attraction_id] ? `${attractionRatings[item.attraction_id]}/5` : 'Avaliar'}</span>
+                              </div>
+                            )}
                             {travelConnector}
                             {attraction && (() => {
                               const hours = attractionHours[item.attraction_id];
@@ -1606,6 +1741,49 @@ export default function TripDetailPage() {
             })}
           </div>
         )}
+
+        {/* Resumo Financeiro */}
+        {showFinancialSummary && (() => {
+          const itinByDay = Array.from({ length: numDays }, (_, i) =>
+            itinerary.filter(it => it.day_number === i + 1).sort((a, b) => a.order_in_day - b.order_in_day)
+          );
+          const rows = itinByDay.map((dayIt, idx) => ({ ...getDayCost(dayIt), day: idx + 1 })).filter(r => r.total > 0 || r.attractions > 0);
+          const grand = rows.reduce((s, r) => ({ total: s.total + r.total, transport: s.transport + r.transport, attractions: s.attractions + r.attractions }), { total: 0, transport: 0, attractions: 0 });
+          return (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden print:hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-between">
+                <h3 className="text-white font-bold text-lg flex items-center gap-2"><Receipt size={18} /> Resumo Financeiro</h3>
+                <button onClick={exportCostsCSV} className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
+                  <Download size={12} /> Exportar CSV
+                </button>
+              </div>
+              {rows.length === 0 ? (
+                <p className="text-gray-400 text-sm p-6 text-center">Nenhum custo informado ainda. Ative o botão "Custos" e preencha os ingressos.</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {rows.map(r => (
+                    <div key={r.day} className="flex items-center px-6 py-3">
+                      <span className="w-16 text-sm font-semibold text-gray-700">Dia {r.day}</span>
+                      <div className="flex-1 flex gap-4 text-sm text-gray-500">
+                        {r.attractions > 0 && <span><Banknote size={12} className="inline mr-1 text-gray-400" />R${r.attractions} ingressos</span>}
+                        {r.transport > 0 && <span><Bike size={12} className="inline mr-1 text-gray-400" />R${r.transport} transporte</span>}
+                      </div>
+                      <span className="font-bold text-gray-800">R${r.total}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center px-6 py-4 bg-blue-50">
+                    <span className="w-16 text-sm font-bold text-blue-700">TOTAL</span>
+                    <div className="flex-1 flex gap-4 text-sm text-blue-500">
+                      {grand.attractions > 0 && <span>R${grand.attractions} ingressos</span>}
+                      {grand.transport > 0 && <span>R${grand.transport} transporte</span>}
+                    </div>
+                    <span className="text-lg font-bold text-blue-700">R${grand.total}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Bate e Volta */}
         {trip && (() => {
