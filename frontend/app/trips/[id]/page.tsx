@@ -378,6 +378,7 @@ export default function TripDetailPage() {
   const [showFinancialSummary, setShowFinancialSummary] = useState(false);
   const [accomSuggestions, setAccomSuggestions] = useState<Record<number, { name: string; address: string; lat: number; lng: number }[]>>({});
   const accomTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const geocodedDays = useRef(new Set<number>());
   const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try { const s = localStorage.getItem(`physical_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : []; } catch { return []; }
@@ -599,6 +600,34 @@ export default function TripDetailPage() {
     if (action.type === 'remove') deleteItem(match);
     else if (action.type === 'move' && action.target_day) moveToDay(match, action.target_day);
   };
+
+  useEffect(() => {
+    if (!trip) return;
+    const toGeocode = Object.entries(dayAccommodation).filter(
+      ([day, v]) => v.name && v.name.length > 1 && !v.lat && !geocodedDays.current.has(parseInt(day))
+    );
+    if (toGeocode.length === 0) return;
+    toGeocode.forEach(async ([day, hotel]) => {
+      const dayNum = parseInt(day);
+      geocodedDays.current.add(dayNum);
+      try {
+        const q = encodeURIComponent(`${hotel.name} ${hotel.address || trip.destination_city}`);
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+          { headers: { 'Accept-Language': 'pt-BR,pt', 'User-Agent': 'TravelPlanner/1.0' } }
+        );
+        const data = await res.json();
+        if (data[0]?.lat) {
+          setDayAccommodation(prev => {
+            if (prev[dayNum]?.lat) return prev;
+            const updated = { ...prev, [dayNum]: { ...prev[dayNum], lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } };
+            localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
+            return updated;
+          });
+        }
+      } catch {}
+    });
+  }, [dayAccommodation, trip, tripId]);
 
   const searchAccom = (dayNum: number, query: string) => {
     if (accomTimers.current[dayNum]) clearTimeout(accomTimers.current[dayNum]);
@@ -1495,30 +1524,36 @@ export default function TripDetailPage() {
 
                         const hotel = dayAccommodation[dayIndex + 1];
                         const fmtMin = (m: number) => m < 60 ? `${m}min` : `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}min` : ''}`;
-                        const hotelConnectorBefore = index === 0 && hotel?.lat && hotel?.lng && attraction ? (() => {
-                          const d = haversineKm(hotel.lat!, hotel.lng!, attraction.latitude, attraction.longitude);
-                          const mode = d < 1 ? 'a pé' : d < 3.5 ? 'de ônibus' : 'de táxi';
+                        const renderHotelConnector = (direction: 'from' | 'to') => {
+                          if (!hotel?.name) return null;
+                          const isFrom = direction === 'from';
+                          if (hotel.lat && hotel.lng && attraction) {
+                            const d = isFrom
+                              ? haversineKm(hotel.lat, hotel.lng, attraction.latitude, attraction.longitude)
+                              : haversineKm(attraction.latitude, attraction.longitude, hotel.lat, hotel.lng);
+                            const speed = d < 1 ? 5 : d < 3.5 ? 20 : 40;
+                            const mode = d < 1 ? 'a pé' : d < 3.5 ? 'de ônibus' : 'de táxi';
+                            return (
+                              <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-200 ml-[28px]">
+                                <BedDouble size={11} className="text-blue-400 shrink-0" />
+                                <span className="text-xs text-blue-500">
+                                  {isFrom ? 'Saindo do hotel' : 'Retorno ao hotel'}
+                                  {' • '}{d.toFixed(1)} km {mode}{' • ~'}{fmtMin(Math.round((d / speed) * 60))}
+                                </span>
+                              </div>
+                            );
+                          }
                           return (
-                            <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-200 ml-[28px]">
-                              <BedDouble size={11} className="text-blue-400 shrink-0" />
-                              <span className="text-xs text-blue-500">
-                                Saindo do hotel • {d.toFixed(1)} km {mode} • ~{fmtMin(Math.round((d / (d < 1 ? 5 : d < 3.5 ? 20 : 40)) * 60))}
+                            <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-100 ml-[28px]">
+                              <BedDouble size={11} className="text-blue-300 shrink-0" />
+                              <span className="text-xs text-blue-400">
+                                {isFrom ? `Saindo de ${hotel.name}` : `Retorno a ${hotel.name}`}
                               </span>
                             </div>
                           );
-                        })() : null;
-                        const hotelConnectorAfter = index === dayItems.length - 1 && hotel?.lat && hotel?.lng && attraction ? (() => {
-                          const d = haversineKm(attraction.latitude, attraction.longitude, hotel.lat!, hotel.lng!);
-                          const mode = d < 1 ? 'a pé' : d < 3.5 ? 'de ônibus' : 'de táxi';
-                          return (
-                            <div className="flex items-center gap-2 px-4 py-1.5 border-l-2 border-dashed border-blue-200 ml-[28px]">
-                              <BedDouble size={11} className="text-blue-400 shrink-0" />
-                              <span className="text-xs text-blue-500">
-                                Retorno ao hotel • {d.toFixed(1)} km {mode} • ~{fmtMin(Math.round((d / (d < 1 ? 5 : d < 3.5 ? 20 : 40)) * 60))}
-                              </span>
-                            </div>
-                          );
-                        })() : null;
+                        };
+                        const hotelConnectorBefore = index === 0 ? renderHotelConnector('from') : null;
+                        const hotelConnectorAfter = index === dayItems.length - 1 ? renderHotelConnector('to') : null;
                         let travelConnector = null;
                         if (attraction && nextAttraction) {
                           const distKm = haversineKm(attraction.latitude, attraction.longitude, nextAttraction.latitude, nextAttraction.longitude);
