@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getSession } from '@/lib/supabase';
 import Link from 'next/link';
@@ -376,6 +376,8 @@ export default function TripDetailPage() {
     try { const s = localStorage.getItem(`ratings_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
   const [showFinancialSummary, setShowFinancialSummary] = useState(false);
+  const [accomSuggestions, setAccomSuggestions] = useState<Record<number, { name: string; address: string }[]>>({});
+  const accomTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try { const s = localStorage.getItem(`physical_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : []; } catch { return []; }
@@ -596,6 +598,34 @@ export default function TripDetailPage() {
     if (!match) return;
     if (action.type === 'remove') deleteItem(match);
     else if (action.type === 'move' && action.target_day) moveToDay(match, action.target_day);
+  };
+
+  const searchAccom = (dayNum: number, query: string) => {
+    if (accomTimers.current[dayNum]) clearTimeout(accomTimers.current[dayNum]);
+    if (!query || query.trim().length < 2) {
+      setAccomSuggestions(prev => ({ ...prev, [dayNum]: [] }));
+      return;
+    }
+    accomTimers.current[dayNum] = setTimeout(async () => {
+      try {
+        const city = trip?.destination_city || '';
+        const q = encodeURIComponent(`${query} ${city}`);
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=6&addressdetails=0`,
+          { headers: { 'Accept-Language': 'pt-BR,pt', 'User-Agent': 'TravelPlanner/1.0' } }
+        );
+        const data: { name?: string; display_name: string }[] = await res.json();
+        setAccomSuggestions(prev => ({
+          ...prev,
+          [dayNum]: data
+            .filter(r => r.name)
+            .map(r => ({
+              name: r.name!,
+              address: r.display_name.split(', ').slice(1, 4).join(', '),
+            })),
+        }));
+      } catch {}
+    }, 500);
   };
 
   const setRating = (attrId: string, rating: number) => {
@@ -1714,7 +1744,7 @@ export default function TripDetailPage() {
                     </div>
                   )}
 
-                  {/* Hospedagem (input) */}
+                  {/* Hospedagem (input + autocomplete Nominatim) */}
                   <div className="print:hidden border-t border-gray-100 px-5 py-3">
                     <div className="flex items-center gap-2">
                       <BedDouble size={16} className="flex-shrink-0 text-gray-300" />
@@ -1722,10 +1752,40 @@ export default function TripDetailPage() {
                         type="text"
                         placeholder="Hotel / Airbnb desta noite (opcional)"
                         value={dayAccommodation[dayIndex + 1]?.name || ''}
-                        onChange={e => updateAccommodation(dayIndex + 1, 'name', e.target.value)}
+                        onChange={e => {
+                          updateAccommodation(dayIndex + 1, 'name', e.target.value);
+                          searchAccom(dayIndex + 1, e.target.value);
+                        }}
                         className="flex-1 text-sm text-gray-600 placeholder-gray-300 bg-transparent outline-none"
+                        autoComplete="off"
                       />
+                      {accomSuggestions[dayIndex + 1]?.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAccomSuggestions(prev => ({ ...prev, [dayIndex + 1]: [] }))}
+                          className="text-gray-300 hover:text-gray-500"
+                        ><X size={13} /></button>
+                      )}
                     </div>
+                    {accomSuggestions[dayIndex + 1]?.length > 0 && (
+                      <div className="mt-1.5 ml-6 rounded-lg border border-gray-100 divide-y divide-gray-50 overflow-hidden bg-white shadow-sm">
+                        {accomSuggestions[dayIndex + 1].map((s, si) => (
+                          <button
+                            key={si}
+                            type="button"
+                            onMouseDown={() => {
+                              updateAccommodation(dayIndex + 1, 'name', s.name);
+                              updateAccommodation(dayIndex + 1, 'address', s.address);
+                              setAccomSuggestions(prev => ({ ...prev, [dayIndex + 1]: [] }));
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-teal-50/60 transition"
+                          >
+                            <p className="text-sm font-medium text-gray-800 truncate">{s.name}</p>
+                            <p className="text-xs text-gray-400 truncate">{s.address}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {dayAccommodation[dayIndex + 1]?.name && (
                       <input
                         type="text"
