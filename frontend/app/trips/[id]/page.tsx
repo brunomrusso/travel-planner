@@ -1660,8 +1660,9 @@ export default function TripDetailPage() {
                               {(dragHandle) => (
                                 <div className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 bg-amber-50/40">
                                   {dragHandle}
-                                  <div className="flex-shrink-0 w-7 h-7 bg-brand-teal-light rounded-full flex items-center justify-center font-bold text-brand-teal text-sm">{index + 1}</div>
-                                  <CategoryIcon category={attraction?.category || ''} size={16} className="text-gray-400 flex-shrink-0" />
+                                  <div className="flex-shrink-0 w-7 h-7 bg-brand-teal-light rounded-full flex items-center justify-center text-brand-teal">
+                                    <CategoryIcon category={attraction?.category || ''} size={14} className="" />
+                                  </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="font-semibold text-gray-900 truncate text-sm">{attraction?.name || 'Atração'}</p>
                                     <p className="text-xs text-gray-400">{categoryPt} • {durationStr}</p>
@@ -1792,20 +1793,22 @@ export default function TripDetailPage() {
                                   type="button"
                                   onClick={() => toggleVisited(item.attraction_id)}
                                   title={visited.has(item.attraction_id) ? 'Desmarcar' : 'Marcar como visitado'}
-                                  className={`print:hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition ${
+                                  className={`print:hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition ${
                                     visited.has(item.attraction_id)
                                       ? 'bg-green-100 text-green-600'
                                       : 'bg-brand-teal-light text-brand-teal hover:bg-green-100 hover:text-green-600'
                                   }`}
                                 >
-                                  {visited.has(item.attraction_id) ? '✓' : index + 1}
+                                  {visited.has(item.attraction_id)
+                                    ? <Check size={16} />
+                                    : <CategoryIcon category={attraction?.category || ''} size={18} className="" />}
                                 </button>
-                                <div className="print:hidden flex-shrink-0 w-10 h-10 rounded-full bg-brand-teal-light hidden print:flex items-center justify-center font-bold text-brand-teal text-lg">
-                                  {index + 1}
+                                <div className="print:hidden flex-shrink-0 w-10 h-10 rounded-full bg-brand-teal-light hidden print:flex items-center justify-center text-brand-teal">
+                                  <CategoryIcon category={attraction?.category || ''} size={18} className="" />
                                 </div>
                                 <button
                                   type="button"
-                                  className="flex-1 flex items-center gap-4 text-left group min-w-0"
+                                  className="flex-1 flex items-center gap-2 sm:gap-3 text-left group min-w-0"
                                   onClick={() => attraction && setSelectedAttraction({
                                     name: attraction.name,
                                     city: attraction.city || trip.destination_city,
@@ -1816,9 +1819,6 @@ export default function TripDetailPage() {
                                     lon: attraction.longitude,
                                   })}
                                 >
-                                  <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                                    <CategoryIcon category={attraction?.category || ''} size={20} />
-                                  </div>
                                   <div className="flex-1 min-w-0">
                                     <h4 className={`font-bold leading-snug group-hover:text-brand-teal transition ${
                                       visited.has(item.attraction_id) ? 'line-through text-gray-400' : 'text-gray-900'
