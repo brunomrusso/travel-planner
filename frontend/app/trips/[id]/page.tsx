@@ -1399,13 +1399,13 @@ export default function TripDetailPage() {
         {/* Roteiro por dia */}
         {itinerary.length > 0 && (
           <div className="space-y-6">
-            <div className="flex items-start justify-between flex-wrap gap-y-2 print:hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 print:hidden">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList size={22} /> Roteiro de Viagem</h2>
-              <div className="flex flex-wrap gap-1.5 justify-end">
+              <div className="flex flex-nowrap overflow-x-auto gap-1.5 pb-0.5 sm:justify-end scrollbar-hide">
                 {/* Primary row: always visible */}
                 <button
                   onClick={() => setIsReordering(r => !r)}
-                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                  className={`flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg transition ${
                     isReordering ? 'bg-brand-teal text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -1413,7 +1413,7 @@ export default function TripDetailPage() {
                 </button>
                 <button
                   onClick={() => setShowCosts(v => !v)}
-                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                  className={`flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg transition ${
                     showCosts ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                   title="Estimativa de custos"
@@ -1422,7 +1422,7 @@ export default function TripDetailPage() {
                 </button>
                 <button
                   onClick={() => setShowFinancialSummary(v => !v)}
-                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                  className={`flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg transition ${
                     showFinancialSummary ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                   title="Resumo financeiro"
@@ -1431,7 +1431,7 @@ export default function TripDetailPage() {
                 </button>
                 <button
                   onClick={() => setShowProfileModal(v => !v)}
-                  className={`text-sm font-medium px-3 py-2 rounded-lg transition ${
+                  className={`flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg transition ${
                     physicalProfiles.length > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                   title="Perfil do viajante"
@@ -1441,28 +1441,28 @@ export default function TripDetailPage() {
                 {/* Secondary: icon-only on mobile */}
                 <button
                   onClick={() => { setPackingChecked(new Set()); setShowPackingList(true); }}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  className="flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                   title="Lista de bagagem"
                 >
                   <Package size={14} className="inline" /><span className="hidden sm:inline ml-1">Bagagem</span>
                 </button>
                 <button
                   onClick={exportToICal}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  className="flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                   title="Exportar para Google/Apple Calendar (.ics)"
                 >
                   <CalendarPlus size={14} className="inline" /><span className="hidden sm:inline ml-1">iCal</span>
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                  className="flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                   title="Imprimir"
                 >
                   <Printer size={14} className="inline" /><span className="hidden sm:inline ml-1">Imprimir</span>
                 </button>
                 <button
                   onClick={() => { setShowExploreModal(true); loadExploreAttractions(); }}
-                  className="text-sm font-medium px-3 py-2 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 transition border border-teal-200"
+                  className="flex-shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 transition border border-teal-200"
                   title="Explorar atrações da cidade"
                 >
                   <Compass size={14} className="inline" /><span className="hidden sm:inline ml-1">Explorar</span>
