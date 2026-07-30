@@ -432,6 +432,15 @@ export default function TripDetailPage() {
         );
         setTrip(tripResponse.data);
         setEditProfiles((tripResponse.data.traveler_profile || '').split(',').filter(Boolean));
+        // Load hotel data from backend (syncs across devices)
+        if (tripResponse.data.day_accommodation) {
+          const acc: Record<number, { name: string; address: string; lat?: number; lng?: number }> = {};
+          for (const [k, v] of Object.entries(tripResponse.data.day_accommodation)) {
+            acc[parseInt(k)] = v as { name: string; address: string; lat?: number; lng?: number };
+          }
+          setDayAccommodation(acc);
+          localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(acc));
+        }
         setIsLoading(false);
 
         const tripDests: DestinationCity[] = tripResponse.data.destinations || [{ city: tripResponse.data.destination_city, country: '', country_code: '' }];
@@ -456,14 +465,16 @@ export default function TripDetailPage() {
     loadTripData();
   }, [tripId, router]);
 
-  // Load accommodation from localStorage after mount (useEffect ensures the
-  // correct tripId key is used even on SSR-hydrated pages / mobile fresh loads)
+  // Fallback: load accommodation from localStorage when backend has no data yet
   useEffect(() => {
     if (!tripId) return;
-    try {
-      const saved = localStorage.getItem(`accommodation_${tripId}`);
-      if (saved) setDayAccommodation(JSON.parse(saved));
-    } catch {}
+    setDayAccommodation(prev => {
+      if (Object.keys(prev).length > 0) return prev; // backend already populated state
+      try {
+        const saved = localStorage.getItem(`accommodation_${tripId}`);
+        return saved ? JSON.parse(saved) : prev;
+      } catch { return prev; }
+    });
   }, [tripId]);
 
   useEffect(() => {
@@ -832,17 +843,34 @@ export default function TripDetailPage() {
     });
   };
 
+  const accomSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveAccommodationToBackend = (updated: Record<number, { name: string; address: string; lat?: number; lng?: number }>) => {
+    if (accomSaveTimer.current) clearTimeout(accomSaveTimer.current);
+    accomSaveTimer.current = setTimeout(async () => {
+      if (!token || !tripId) return;
+      try {
+        await axios.put(
+          `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}`,
+          { day_accommodation: updated },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (e) { console.error('save accommodation', e); }
+    }, 800);
+  };
+
   const updateAccommodation = (day: number, field: 'name' | 'address', value: string) => {
     const current = dayAccommodation[day] || { name: '', address: '' };
     const updated = { ...dayAccommodation, [day]: { ...current, [field]: value } };
     setDayAccommodation(updated);
     localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
+    saveAccommodationToBackend(updated);
   };
 
   const pickAccommodation = (day: number, s: { name: string; address: string; lat: number; lng: number }) => {
     const updated = { ...dayAccommodation, [day]: { name: s.name, address: s.address, lat: s.lat, lng: s.lng } };
     setDayAccommodation(updated);
     localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
+    saveAccommodationToBackend(updated);
     setAccomSuggestions(prev => ({ ...prev, [day]: [] }));
   };
 
