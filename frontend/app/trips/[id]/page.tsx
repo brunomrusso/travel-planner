@@ -13,7 +13,7 @@ import TripChat, { type ItineraryAction } from '@/components/TripChat';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import ShareTripModal from '@/components/ShareTripModal';
 import ThemeToggle from '@/components/ThemeToggle';
-import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, Banknote, GripVertical, Star, CalendarPlus, Route, Receipt, Download, type LucideIcon } from 'lucide-react';
+import { Share2, Trash2, RefreshCw, Info, Printer, ArrowUpDown, Check, Plus, X, ArrowLeft, Package, MapPin, ChevronDown, Utensils, Landmark, Leaf, Music, Waves, Heart, PawPrint, ShoppingBag, Palette, User, Bike, Bus, Car, BedDouble, FileText, Search, Globe, ClipboardList, Sparkles, Lightbulb, Map, Calendar, Clock, Plane, Trophy, AlertTriangle, Banknote, GripVertical, Star, CalendarPlus, Route, Receipt, Download, Compass, type LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -356,6 +356,11 @@ export default function TripDetailPage() {
   const [addModalDay, setAddModalDay] = useState<number | null>(null);
   const [availableAttractions, setAvailableAttractions] = useState<Attraction[]>([]);
   const [attrSearch, setAttrSearch] = useState('');
+  const [showExploreModal, setShowExploreModal] = useState(false);
+  const [exploreSearch, setExploreSearch] = useState('');
+  const [exploreCategory, setExploreCategory] = useState('');
+  const [exploreSuggestion, setExploreSuggestion] = useState<{ attr: Attraction; day: number; swapTarget?: ItineraryItem } | null>(null);
+  const [exploreLoading, setExploreLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [token, setToken] = useState('');
   const [showPackingList, setShowPackingList] = useState(false);
@@ -835,6 +840,68 @@ export default function TripDetailPage() {
     setDayAccommodation(updated);
     localStorage.setItem(`accommodation_${tripId}`, JSON.stringify(updated));
     setAccomSuggestions(prev => ({ ...prev, [day]: [] }));
+  };
+
+  const suggestBestDay = (attr: Attraction): { day: number; swapTarget?: ItineraryItem } => {
+    if (!trip) return { day: 1 };
+    const start = new Date(trip.start_date + 'T00:00:00');
+    const end = new Date(trip.end_date + 'T00:00:00');
+    const numDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    const TARGET_MIN = 360;
+    const attrDur = attr.visit_duration_minutes || 60;
+    const dayStats = Array.from({ length: numDays }, (_, i) => {
+      const day = i + 1;
+      const dayItems = itinerary.filter(it => it.day_number === day);
+      const usedMin = dayItems.reduce((s, it) => s + (attractions.find(a => a.id === it.attraction_id)?.visit_duration_minutes || 60), 0);
+      const freeMin = Math.max(0, TARGET_MIN - usedMin);
+      const avgDist = dayItems.length > 0
+        ? dayItems.reduce((s, it) => {
+            const a = attractions.find(a => a.id === it.attraction_id);
+            return s + (a ? haversineKm(attr.latitude, attr.longitude, a.latitude, a.longitude) : 0);
+          }, 0) / dayItems.length
+        : 999;
+      return { day, usedMin, freeMin, canFit: freeMin >= attrDur, avgDist, dayItems };
+    });
+    const eligible = dayStats.filter(d => d.canFit);
+    if (eligible.length > 0) {
+      const best = eligible.reduce((a, b) =>
+        a.avgDist * 0.7 + (a.usedMin / TARGET_MIN) * 0.3 < b.avgDist * 0.7 + (b.usedMin / TARGET_MIN) * 0.3 ? a : b
+      );
+      return { day: best.day };
+    }
+    const closest = dayStats.reduce((a, b) => a.avgDist < b.avgDist ? a : b);
+    const swapTarget = closest.dayItems.length > 0 ? closest.dayItems[closest.dayItems.length - 1] : undefined;
+    return { day: closest.day, swapTarget };
+  };
+
+  const loadExploreAttractions = async () => {
+    if (availableAttractions.length > 0) return; // already loaded
+    setExploreLoading(true);
+    try {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/available-attractions`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAvailableAttractions(res.data);
+    } catch (e) { console.error('explore', e); }
+    finally { setExploreLoading(false); }
+  };
+
+  const confirmExploreAdd = async (attr: Attraction, day: number, swapTarget?: ItineraryItem) => {
+    try {
+      if (swapTarget) await deleteItem(swapTarget);
+      const dayItems = itinerary.filter(i => i.day_number === day && i.id !== swapTarget?.id);
+      const newOrder = dayItems.reduce((m, i) => Math.max(m, i.order_in_day), 0) + 1;
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`,
+        { attraction_id: attr.id, day_number: day, order_in_day: newOrder, notes: '' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setItinerary(prev => [...prev, res.data]);
+      setAvailableAttractions(prev => prev.filter(a => a.id !== attr.id));
+      setExploreSuggestion(null);
+      setShowExploreModal(false);
+    } catch (e) { console.error('confirmExploreAdd', e); }
   };
 
   const openAddModal = async (day: number) => {
@@ -1360,6 +1427,13 @@ export default function TripDetailPage() {
                   title="Imprimir"
                 >
                   <Printer size={14} className="inline" /><span className="hidden sm:inline ml-1">Imprimir</span>
+                </button>
+                <button
+                  onClick={() => { setShowExploreModal(true); loadExploreAttractions(); }}
+                  className="text-sm font-medium px-3 py-2 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 transition border border-teal-200"
+                  title="Explorar atrações da cidade"
+                >
+                  <Compass size={14} className="inline" /><span className="hidden sm:inline ml-1">Explorar</span>
                 </button>
               </div>
             </div>
@@ -2324,6 +2398,134 @@ export default function TripDetailPage() {
           lon={selectedAttraction.lon}
           onClose={() => setSelectedAttraction(null)}
         />
+      )}
+
+      {/* Explorar Cidade Modal */}
+      {showExploreModal && (
+        <div className="fixed inset-0 z-[9990] flex items-end sm:items-center justify-center" onClick={() => { setShowExploreModal(false); setExploreSuggestion(null); setExploreSearch(''); setExploreCategory(''); }}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Compass size={20} className="text-brand-teal" />
+                <h3 className="font-bold text-gray-900 text-lg">Explorar {trip?.destination_city}</h3>
+              </div>
+              <button onClick={() => { setShowExploreModal(false); setExploreSuggestion(null); setExploreSearch(''); setExploreCategory(''); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition">
+                <X size={16} />
+              </button>
+            </div>
+            {/* Search */}
+            <div className="px-4 pt-3 pb-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar atração..."
+                  value={exploreSearch}
+                  onChange={e => setExploreSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-brand-teal transition"
+                />
+                {exploreSearch && <button onClick={() => setExploreSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={13} /></button>}
+              </div>
+            </div>
+            {/* Category chips */}
+            <div className="px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+              {(['', 'museum', 'park', 'restaurant', 'historic', 'gallery', 'zoo', 'beach', 'entertainment'] as const).map(cat => {
+                const labels: Record<string, string> = { '': 'Todos', ...CATEGORY_PT };
+                const active = exploreCategory === cat;
+                return (
+                  <button key={cat} onClick={() => setExploreCategory(cat)}
+                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs border transition font-medium ${active ? 'border-brand-teal bg-brand-teal-light text-brand-teal' : 'border-gray-200 text-gray-500 hover:border-brand-teal'}`}>
+                    {labels[cat] || cat}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Suggestion banner */}
+            {exploreSuggestion && (() => {
+              const swapAttr = exploreSuggestion.swapTarget ? attractions.find(a => a.id === exploreSuggestion.swapTarget!.attraction_id) : null;
+              const start = trip ? new Date(trip.start_date + 'T00:00:00') : null;
+              const end = trip ? new Date(trip.end_date + 'T00:00:00') : null;
+              const numDays = start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1) : 1;
+              return (
+                <div className="mx-4 mb-2 p-3 bg-teal-50 border border-teal-200 rounded-xl">
+                  <p className="text-sm font-semibold text-teal-800 mb-2 flex items-center gap-1.5">
+                    <Lightbulb size={14} className="text-teal-600" />
+                    {exploreSuggestion.swapTarget
+                      ? `Dia ${exploreSuggestion.day} está cheio — trocar "${swapAttr?.name || '...'}" por "${exploreSuggestion.attr.name}"?`
+                      : `Sugestão: Dia ${exploreSuggestion.day} (mais próximo e com tempo livre)`}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => confirmExploreAdd(exploreSuggestion.attr, exploreSuggestion.day, exploreSuggestion.swapTarget)}
+                      className="bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-teal-dark transition flex items-center gap-1">
+                      <Check size={13} /> {exploreSuggestion.swapTarget ? 'Trocar' : 'Confirmar'}
+                    </button>
+                    <select
+                      value={exploreSuggestion.day}
+                      onChange={e => setExploreSuggestion(prev => prev ? { ...prev, day: parseInt(e.target.value), swapTarget: undefined } : null)}
+                      className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-brand-teal bg-white"
+                    >
+                      {Array.from({ length: numDays }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>Dia {i + 1}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => setExploreSuggestion(null)} className="text-sm text-gray-400 hover:text-gray-600 transition">Cancelar</button>
+                  </div>
+                </div>
+              );
+            })()}
+            {/* Attractions list */}
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-50">
+              {exploreLoading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
+                  <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-brand-teal rounded-full animate-spin" />
+                  Carregando atrações...
+                </div>
+              ) : (() => {
+                const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const inItinerary = new Set(itinerary.map(i => i.attraction_id));
+                const filtered = availableAttractions.filter(a => {
+                  if (inItinerary.has(a.id)) return false;
+                  if (exploreCategory && a.category !== exploreCategory) return false;
+                  if (exploreSearch && !norm(a.name).includes(norm(exploreSearch))) return false;
+                  return true;
+                });
+                if (filtered.length === 0) return (
+                  <div className="py-16 text-center text-sm text-gray-400">
+                    {exploreSearch || exploreCategory ? 'Nenhuma atração encontrada com esses filtros.' : 'Todas as atrações disponíveis já estão no roteiro!'}
+                  </div>
+                );
+                return filtered.map(a => {
+                  const dur = a.visit_duration_minutes >= 60
+                    ? `${Math.floor(a.visit_duration_minutes / 60)}h${a.visit_duration_minutes % 60 > 0 ? (a.visit_duration_minutes % 60) + 'min' : ''}`
+                    : `${a.visit_duration_minutes}min`;
+                  const isSuggested = exploreSuggestion?.attr.id === a.id;
+                  return (
+                    <div key={a.id} className={`flex items-center gap-3 px-4 py-3 transition ${isSuggested ? 'bg-teal-50' : 'hover:bg-gray-50'}`}>
+                      <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 flex items-center justify-center">
+                        <CategoryIcon category={a.category} size={16} className="text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm truncate">{a.name}</p>
+                        <p className="text-xs text-gray-400">{CATEGORY_PT[a.category] || a.category} · ⏱ {dur}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const suggestion = suggestBestDay(a);
+                          setExploreSuggestion({ attr: a, ...suggestion });
+                        }}
+                        className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition ${isSuggested ? 'bg-brand-teal text-white' : 'bg-gray-100 text-gray-600 hover:bg-teal-50 hover:text-brand-teal border border-transparent hover:border-teal-200'}`}
+                      >
+                        {isSuggested ? '✓ Selecionado' : '+ Adicionar'}
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
