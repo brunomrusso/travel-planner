@@ -410,13 +410,7 @@ export default function TripDetailPage() {
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
-  const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string; lat?: number; lng?: number }>>(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem(`accommodation_${window.location.pathname.split('/').pop()}`);
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
+  const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string; lat?: number; lng?: number }>>({});
 
   useEffect(() => {
     const loadTripData = async () => {
@@ -461,6 +455,16 @@ export default function TripDetailPage() {
 
     loadTripData();
   }, [tripId, router]);
+
+  // Load accommodation from localStorage after mount (useEffect ensures the
+  // correct tripId key is used even on SSR-hydrated pages / mobile fresh loads)
+  useEffect(() => {
+    if (!tripId) return;
+    try {
+      const saved = localStorage.getItem(`accommodation_${tripId}`);
+      if (saved) setDayAccommodation(JSON.parse(saved));
+    } catch {}
+  }, [tripId]);
 
   useEffect(() => {
     if (itinerary.length === 0 || !token) return;
@@ -1589,17 +1593,6 @@ export default function TripDetailPage() {
                     </div>
                   </div>
 
-                  {/* Hospedagem (banner) */}
-                  {dayAccommodation[dayIndex + 1]?.name && (
-                    <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-b border-blue-100 text-sm text-blue-800">
-                      <BedDouble size={16} className="flex-shrink-0 text-blue-500" />
-                      <span className="font-medium truncate">{dayAccommodation[dayIndex + 1].name}</span>
-                      {dayAccommodation[dayIndex + 1].address && (
-                        <span className="text-blue-500 text-xs truncate hidden sm:inline">· {dayAccommodation[dayIndex + 1].address}</span>
-                      )}
-                    </div>
-                  )}
-
                   {tips?.days && dayItems.length > 0 && (() => {
                     const dt = tips.days!.find(d => d.day === dayIndex + 1);
                     if (!dt) return null;
@@ -1611,6 +1604,17 @@ export default function TripDetailPage() {
                       </div>
                     );
                   })()}
+
+                  {/* Hospedagem (banner) */}
+                  {dayAccommodation[dayIndex + 1]?.name && (
+                    <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-b border-blue-100 text-sm text-blue-800">
+                      <BedDouble size={16} className="flex-shrink-0 text-blue-500" />
+                      <span className="font-medium truncate">{dayAccommodation[dayIndex + 1].name}</span>
+                      {dayAccommodation[dayIndex + 1].address && (
+                        <span className="text-blue-500 text-xs truncate hidden sm:inline">· {dayAccommodation[dayIndex + 1].address}</span>
+                      )}
+                    </div>
+                  )}
 
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => handleDragEnd(e, dayItems)}>
                     {dayItems.length === 0 ? (
