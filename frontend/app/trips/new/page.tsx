@@ -164,6 +164,20 @@ function getSeasonalAlerts(cities: string[], start: string, end: string) {
   return found;
 }
 
+function distributeDaysEvenly(dests: DestEntry[], total: number): DestEntry[] {
+  const validDests = dests.filter(d => d.valid);
+  const n = validDests.length;
+  if (n === 0 || total <= 0) return dests;
+  const base = Math.floor(total / n);
+  let validIdx = 0;
+  return dests.map(d => {
+    if (!d.valid) return d;
+    const days = validIdx === n - 1 ? total - base * (n - 1) : base;
+    validIdx++;
+    return { ...d, days };
+  });
+}
+
 const emptyDest = (): DestEntry => ({
   city: '', country: '', country_code: '', query: '',
   valid: null, suggestions: [], showSuggestions: false, isSearching: false, days: 1,
@@ -334,14 +348,17 @@ export default function NewTripPage() {
     ? Math.ceil((new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) / 86400000) + 1
     : 0;
 
-  const distributeDaysEvenly = (dests: DestEntry[], total: number): DestEntry[] => {
-    if (dests.length === 0 || total <= 0) return dests;
-    const base = Math.floor(total / dests.length);
-    return dests.map((d, i) => ({
-      ...d,
-      days: i === dests.length - 1 ? total - base * (dests.length - 1) : base,
-    }));
-  };
+  // Auto-redistribute whenever tripDays changes and total is out of sync
+  useEffect(() => {
+    if (tripDays <= 0) return;
+    setDestinations(prev => {
+      const validCount = prev.filter(d => d.valid).length;
+      if (validCount < 2) return prev;
+      const currentTotal = prev.filter(d => d.valid).reduce((s, d) => s + d.days, 0);
+      if (currentTotal === tripDays) return prev;
+      return distributeDaysEvenly(prev, tripDays);
+    });
+  }, [tripDays]);
 
   const addDestination = () => {
     setDestinations(prev => {
@@ -375,6 +392,13 @@ export default function NewTripPage() {
     e.preventDefault();
     const invalid = destinations.find(d => d.valid !== true);
     if (invalid) { setError('Confirme todos os destinos na lista de sugestões.'); return; }
+    if (destinations.length > 1 && tripDays > 0) {
+      const totalAssigned = destinations.reduce((s, d) => s + d.days, 0);
+      if (totalAssigned !== tripDays) {
+        setError(`Total de dias atribuídos (${totalAssigned}) não bate com a duração da viagem (${tripDays} dias). Ajuste os dias por cidade.`);
+        return;
+      }
+    }
     if (profiles.length === 0) { setError('Selecione ao menos um perfil de viajante.'); return; }
     setError('');
     setIsLoading(true);
@@ -594,31 +618,58 @@ export default function NewTripPage() {
               </div>
             )}
 
-            {destinations.length > 1 && tripDays > 0 && (
-              <div className="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dias por cidade</p>
-                {destinations.map((dest, idx) => (
-                  dest.valid ? (
-                    <div key={idx} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-gray-700 flex items-center gap-1 flex-1 min-w-0 truncate">
-                        {dest.country_code && <FlagImg code={dest.country_code} size="sm" />} {dest.city}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => setDestDays(idx, dest.days - 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">−</button>
-                        <span className="w-8 text-center font-semibold text-gray-900 text-sm">{dest.days}</span>
-                        <button type="button" onClick={() => setDestDays(idx, dest.days + 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">+</button>
+            {destinations.length > 1 && tripDays > 0 && (() => {
+              const totalAssigned = destinations.reduce((s, d) => s + d.days, 0);
+              const balanced = totalAssigned === tripDays;
+              return (
+                <div className="mt-3 bg-gray-50 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dias por cidade</p>
+                    <button type="button"
+                      onClick={() => setDestinations(prev => distributeDaysEvenly(prev, tripDays))}
+                      className="text-xs text-brand-teal hover:text-brand-teal-dark font-medium flex items-center gap-1">
+                      ↺ Redistribuir igualmente
+                    </button>
+                  </div>
+                  {destinations.map((dest, idx) => (
+                    dest.valid ? (
+                      <div key={idx} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-700 flex items-center gap-1 flex-1 min-w-0 truncate">
+                          {dest.country_code && <FlagImg code={dest.country_code} size="sm" />} {dest.city}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => setDestDays(idx, dest.days - 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">−</button>
+                          <span className="w-8 text-center font-semibold text-gray-900 text-sm">{dest.days}</span>
+                          <button type="button" onClick={() => setDestDays(idx, dest.days + 1)} className="w-7 h-7 rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center font-bold">+</button>
+                        </div>
                       </div>
+                    ) : null
+                  ))}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-200 gap-2">
+                    <span className="text-xs text-gray-500">Total</span>
+                    <div className="flex items-center gap-2">
+                      {!balanced && (
+                        <span className="text-xs text-red-600">
+                          {totalAssigned > tripDays
+                            ? `${totalAssigned - tripDays} dia${totalAssigned - tripDays > 1 ? 's' : ''} a mais`
+                            : `${tripDays - totalAssigned} dia${tripDays - totalAssigned > 1 ? 's' : ''} faltando`}
+                        </span>
+                      )}
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        balanced ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {totalAssigned} / {tripDays} dias
+                      </span>
                     </div>
-                  ) : null
-                ))}
-                <div className="flex justify-between items-center pt-1 border-t border-gray-200">
-                  <span className="text-xs text-gray-500">Total</span>
-                  <span className={`text-xs font-semibold ${destinations.reduce((s, d) => s + d.days, 0) === tripDays ? 'text-green-600' : 'text-red-500'}`}>
-                    {destinations.reduce((s, d) => s + d.days, 0)} / {tripDays} dias
-                  </span>
+                  </div>
+                  {!balanced && (
+                    <p className="text-xs text-red-500 text-center">
+                      Ajuste os dias ou clique em &#34;Redistribuir igualmente&#34; para continuar.
+                    </p>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {seasonalAlerts.length > 0 && (
