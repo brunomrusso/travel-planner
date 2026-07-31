@@ -1174,13 +1174,20 @@ export default function TripDetailPage() {
         {},
         { headers, timeout: 120000 }
       );
-      // Re-fetch itinerary without full page reload
-      const [itineraryRes, attractionsRes] = await Promise.allSettled([
+      // Re-fetch itinerary + attractions for ALL cities (mirrors initial load)
+      const tripDests: DestinationCity[] = trip?.destinations?.length
+        ? trip.destinations
+        : [{ city: trip?.destination_city || '', country: '', country_code: '' }];
+      const [itineraryRes, ...attrResults] = await Promise.allSettled([
         axios.get(`${process.env.NEXT_PUBLIC_API_URL}/itineraries/${tripId}`, { headers }),
-        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${trip?.destination_city}`, { headers }),
+        ...tripDests.map(d => axios.get(`${process.env.NEXT_PUBLIC_API_URL}/attractions/?city=${encodeURIComponent(d.city)}`, { headers, timeout: 20000 })),
       ]);
       if (itineraryRes.status === 'fulfilled') setItinerary(itineraryRes.value.data);
-      if (attractionsRes.status === 'fulfilled') setAttractions(attractionsRes.value.data);
+      const allAttrs: Attraction[] = [];
+      for (const r of attrResults) {
+        if (r.status === 'fulfilled') allAttrs.push(...r.value.data);
+      }
+      if (allAttrs.length > 0) setAttractions(allAttrs);
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Error generating itinerary. Please try again.';
       setGenerateError(msg);
