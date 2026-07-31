@@ -1172,7 +1172,7 @@ export default function TripDetailPage() {
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/generate-itinerary`,
         {},
-        { headers, timeout: 30000 }
+        { headers, timeout: 120000 }
       );
       // Re-fetch itinerary without full page reload
       const [itineraryRes, attractionsRes] = await Promise.allSettled([

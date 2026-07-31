@@ -293,6 +293,7 @@ export default function NewTripPage() {
   };
 
   const quickAddCity = async (baseIdx: number, cityName: string) => {
+    if (destinations.length >= 8) return; // cap at 8 cities
     // Find first empty or country-detected slot at/after baseIdx, else append
     const targetIdx = (() => {
       for (let i = baseIdx; i < destinations.length; i++) {
@@ -466,7 +467,7 @@ export default function NewTripPage() {
           <div>
             <div className="flex justify-between items-center mb-3">
               <label className="block text-gray-700 font-semibold">🌍 Destinos</label>
-              {destinations.length < 5 && (
+              {destinations.length < 8 && (
                 <button type="button" onClick={addDestination}
                   className="text-sm text-brand-teal hover:text-brand-teal-dark font-medium flex items-center gap-1 border border-brand-teal px-3 py-1 rounded-lg transition">
                   + Adicionar cidade

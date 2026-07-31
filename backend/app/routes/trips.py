@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 import uuid as _uuid
 from datetime import datetime
+import asyncio
 import statistics
 from pydantic import BaseModel
 from app.models.trip import Trip, TripCreate, TripUpdate
@@ -216,9 +217,10 @@ async def generate_itinerary(trip_id: UUID, user_id: str = Depends(get_user_id_f
         if not destinations:
             destinations = [{"city": trip["destination_city"], "country": "", "country_code": ""}]
 
-        # Ensure attractions exist for ALL cities
-        for dest in destinations:
-            await _ensure_attractions_for_city(dest["city"], supabase)
+        # Ensure attractions exist for ALL cities in parallel
+        await asyncio.gather(
+            *[_ensure_attractions_for_city(dest["city"], supabase) for dest in destinations]
+        )
 
         # Fetch weather forecast to enable weather-aware scheduling
         weather_data = []

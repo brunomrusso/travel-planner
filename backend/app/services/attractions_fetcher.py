@@ -65,11 +65,28 @@ CITY_NAME_ALIASES: Dict[str, str] = {
     "nápoles": "Naples",
     # Spain
     "madri": "Madrid",
+    "sevilha": "Sevilla",
+    "valência": "Valencia",
+    "valencia": "Valencia",
+    "zaragoza": "Zaragoza",
+    "córdoba": "Córdoba",
+    "cordoba": "Córdoba",
+    "palma de mallorca": "Palma de Mallorca",
+    "san sebastiao": "San Sebastián",
+    "san sebastião": "San Sebastián",
     # Portugal
     "lisboa": "Lisbon",
+    "algarve": "Faro",
+    "évora": "Évora",
+    "coimbra": "Coimbra",
+    "braga": "Braga",
     # Turkey
     "istambul": "Istanbul",
     "istambull": "Istanbul",
+    "capadócia": "Göreme",
+    "cappadocia": "Göreme",
+    "éfeso": "Selçuk",
+    "antalya": "Antalya",
     # Russia
     "moscou": "Moscow",
     "moscovo": "Moscow",
@@ -80,6 +97,8 @@ CITY_NAME_ALIASES: Dict[str, str] = {
     # Japan
     "toquio": "Tokyo",
     "tóquio": "Tokyo",
+    "quioto": "Kyoto",
+    "kyoto": "Kyoto",
     # China
     "pequim": "Beijing",
     "xangai": "Shanghai",
@@ -90,6 +109,51 @@ CITY_NAME_ALIASES: Dict[str, str] = {
     # South Africa
     "johanesburgo": "Johannesburg",
     "johannesburgo": "Johannesburg",
+    # France
+    "estrasburgo": "Strasbourg",
+    "marselha": "Marseille",
+    "lyon": "Lyon",
+    "bordeaux": "Bordeaux",
+    "toulouse": "Toulouse",
+    # Switzerland
+    "berna": "Bern",
+    "lucerna": "Lucerne",
+    "interlaken": "Interlaken",
+    # Austria
+    "salzburgo": "Salzburg",
+    "innsbruck": "Innsbruck",
+    "hallstatt": "Hallstatt",
+    # Greece
+    "creta": "Heraklion",
+    "rodes": "Rhodes",
+    "thessaloniki": "Thessaloniki",
+    # India
+    "nova delhi": "New Delhi",
+    "goa": "Panaji",
+    "varanasi": "Varanasi",
+    # Morocco
+    "marrakech": "Marrakech",
+    "chefchaouen": "Chefchaouen",
+    # Vietnam
+    "hanói": "Hanoi",
+    "hanoi": "Hanoi",
+    "ho chi minh": "Ho Chi Minh City",
+    "hoi an": "Hội An",
+    # Indonesia
+    "jacarta": "Jakarta",
+    "bali": "Denpasar",
+    "lombok": "Mataram",
+    # South Africa
+    "cidade do cabo": "Cape Town",
+    # Egypt
+    "assua": "Aswan",
+    "luxor": "Luxor",
+    # Canada
+    "quebec": "Québec City",
+    "banff": "Banff",
+    # Sweden
+    "gotemburgo": "Gothenburg",
+    "malmo": "Malmö",
     # USA
     "nova iorque": "New York",
     "nova york": "New York",
@@ -98,6 +162,9 @@ CITY_NAME_ALIASES: Dict[str, str] = {
     "são francisco": "San Francisco",
     "los angeles": "Los Angeles",
     "washington dc": "Washington D.C.",
+    "chicago": "Chicago",
+    "miami": "Miami",
+    "las vegas": "Las Vegas",
     # Mexico
     "cidade do mexico": "Mexico City",
     "cidade do méxico": "Mexico City",
