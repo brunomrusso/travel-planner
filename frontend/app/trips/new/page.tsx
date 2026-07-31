@@ -19,6 +19,8 @@ interface CityOption {
   display_name: string;
   lat?: string;
   lon?: string;
+  class?: string;
+  type?: string;
   address?: { country?: string; city?: string; town?: string; village?: string; country_code?: string };
 }
 
@@ -34,6 +36,7 @@ interface DestEntry {
   days: number;
   lat?: number;
   lon?: number;
+  countryDetected?: { name: string; code: string };
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -87,6 +90,61 @@ const SEASONAL_ALERTS: Array<{ keys: string[]; months: number[]; level: 'warn' |
   { keys: ['praga', 'prague'], months: [7, 8], level: 'info', msg: 'Praga no verão: muito turística, visite cedo pela manhã para evitar multidões.' },
 ];
 
+const COUNTRY_TOP_CITIES: Record<string, string[]> = {
+  es: ['Madrid', 'Barcelona', 'Sevilha', 'Granada', 'Toledo', 'Valencia', 'Bilbao', 'Córdoba'],
+  fr: ['Paris', 'Nice', 'Lyon', 'Bordeaux', 'Marseille', 'Estrasburgo', 'Toulouse'],
+  it: ['Roma', 'Florença', 'Veneza', 'Milão', 'Nápoles', 'Siena', 'Cinque Terre', 'Bolonha'],
+  pt: ['Lisboa', 'Porto', 'Faro', 'Sintra', 'Coimbra', 'Évora', 'Braga'],
+  de: ['Berlim', 'Munique', 'Hamburgo', 'Colônia', 'Frankfurt', 'Dresden', 'Nuremberg'],
+  gb: ['Londres', 'Edinburgh', 'Bath', 'Oxford', 'Cambridge', 'York', 'Manchester'],
+  gr: ['Atenas', 'Santorini', 'Mykonos', 'Thessaloniki', 'Creta', 'Rodes'],
+  jp: ['Tóquio', 'Kyoto', 'Osaka', 'Hiroshima', 'Nara', 'Hakone', 'Nikko'],
+  us: ['Nova York', 'Los Angeles', 'Miami', 'Chicago', 'San Francisco', 'Las Vegas', 'New Orleans'],
+  br: ['São Paulo', 'Rio de Janeiro', 'Salvador', 'Florianópolis', 'Curitiba', 'Manaus', 'Natal'],
+  ar: ['Buenos Aires', 'Bariloche', 'Mendoza', 'Salta', 'Córdoba', 'Ushuaia'],
+  pe: ['Lima', 'Cusco', 'Machu Picchu', 'Arequipa', 'Paracas'],
+  th: ['Bangkok', 'Chiang Mai', 'Phuket', 'Koh Samui', 'Ayutthaya'],
+  au: ['Sydney', 'Melbourne', 'Brisbane', 'Cairns', 'Gold Coast', 'Perth'],
+  cn: ['Pequim', 'Xangai', 'Chengdu', "Xi'an", 'Guilin', 'Zhangjiajie'],
+  mx: ['Cidade do México', 'Cancún', 'Oaxaca', 'Guadalajara', 'Tulum'],
+  tr: ['Istambul', 'Capadócia', 'Antalya', 'Éfeso', 'Pamukkale'],
+  in: ['Nova Delhi', 'Mumbai', 'Jaipur', 'Agra', 'Goa', 'Varanasi'],
+  ma: ['Marrakech', 'Fes', 'Casablanca', 'Chefchaouen', 'Essaouira'],
+  nl: ['Amsterdã', 'Haia', 'Utrecht', 'Roterdã'],
+  ch: ['Zurique', 'Genebra', 'Berna', 'Lucerna', 'Interlaken'],
+  at: ['Viena', 'Salzburgo', 'Innsbruck', 'Hallstatt'],
+  hu: ['Budapeste', 'Eger', 'Pécs'],
+  cz: ['Praga', 'Brno', 'Český Krumlov'],
+  pl: ['Varsóvia', 'Cracóvia', 'Gdansk', 'Wrocław'],
+  no: ['Oslo', 'Bergen', 'Tromsø', 'Ålesund'],
+  dk: ['Copenhague', 'Aarhus'],
+  se: ['Estocolmo', 'Gotemburgo'],
+  nz: ['Auckland', 'Queenstown', 'Wellington', 'Christchurch'],
+  ca: ['Toronto', 'Vancouver', 'Montreal', 'Quebec', 'Banff'],
+  za: ['Cidade do Cabo', 'Joanesburgo', 'Durban'],
+  eg: ['Cairo', 'Luxor', 'Assuã', 'Hurghada'],
+  kr: ['Seul', 'Busan', 'Jeju'],
+  vn: ['Hanói', 'Ho Chi Minh', 'Hoi An', 'Da Nang'],
+  id: ['Bali', 'Jacarta', 'Yogyakarta', 'Lombok'],
+};
+
+const _norm = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const COUNTRY_PT_NAMES: Record<string, string> = {
+  espanha: 'es', franca: 'fr', italia: 'it', portugal: 'pt', alemanha: 'de',
+  'reino unido': 'gb', grecia: 'gr', japao: 'jp', 'estados unidos': 'us', eua: 'us',
+  brasil: 'br', argentina: 'ar', peru: 'pe', tailandia: 'th', australia: 'au',
+  china: 'cn', mexico: 'mx', turquia: 'tr', india: 'in', marrocos: 'ma',
+  holanda: 'nl', 'paises baixos': 'nl', suica: 'ch', austria: 'at', hungria: 'hu',
+  'republica tcheca: ': 'cz', polonia: 'pl', noruega: 'no', dinamarca: 'dk',
+  suecia: 'se', 'nova zelandia': 'nz', canada: 'ca', 'africa do sul': 'za',
+  egito: 'eg', 'coreia do sul': 'kr', vietna: 'vn', indonesia: 'id', singapura: 'sg',
+  belgica: 'be', russia: 'ru', ucrania: 'ua', escocia: 'gb', irlanda: 'ie',
+  cuba: 'cu', colombia: 'co', chile: 'cl', bolivia: 'bo', equador: 'ec',
+  tailândia: 'th',
+};
+
 function getSeasonalAlerts(cities: string[], start: string, end: string) {
   if (!start || !end) return [];
   const months = new Set<number>();
@@ -109,7 +167,7 @@ function getSeasonalAlerts(cities: string[], start: string, end: string) {
 const emptyDest = (): DestEntry => ({
   city: '', country: '', country_code: '', query: '',
   valid: null, suggestions: [], showSuggestions: false, isSearching: false, days: 1,
-  lat: undefined, lon: undefined,
+  lat: undefined, lon: undefined, countryDetected: undefined,
 });
 
 
@@ -159,12 +217,28 @@ export default function NewTripPage() {
     setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, isSearching: true } : d));
     try {
       const res = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: { q: query, format: 'json', limit: 5, featuretype: 'city', addressdetails: 1 },
+        params: { q: query, format: 'json', limit: 8, addressdetails: 1 },
         headers: { 'Accept-Language': 'pt-BR' },
         timeout: 5000,
       });
+      // Filter out country-level results (no city/town/village in address)
+      const cityResults: CityOption[] = (res.data as CityOption[]).filter(
+        r => r.address?.city || r.address?.town || r.address?.village
+      );
+      // If Nominatim returned only country-level results, treat as country input
+      if (cityResults.length === 0 && res.data.length > 0) {
+        const first = res.data[0] as CityOption;
+        const cc = first.address?.country_code || '';
+        if (cc && COUNTRY_TOP_CITIES[cc]) {
+          setDestinations(prev => prev.map((d, i) => i === idx
+            ? { ...d, countryDetected: { name: query, code: cc }, suggestions: [], showSuggestions: false, isSearching: false }
+            : d
+          ));
+          return;
+        }
+      }
       setDestinations(prev => prev.map((d, i) => i === idx
-        ? { ...d, suggestions: res.data, showSuggestions: res.data.length > 0, valid: res.data.length === 0 ? false : null, isSearching: false }
+        ? { ...d, suggestions: cityResults, showSuggestions: cityResults.length > 0, valid: cityResults.length === 0 ? false : null, isSearching: false }
         : d
       ));
     } catch {
@@ -173,7 +247,17 @@ export default function NewTripPage() {
   };
 
   const handleCityInput = (idx: number, val: string) => {
-    setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, query: val, city: val, valid: null } : d));
+    // Detect if user typed a country name (PT-BR)
+    const detectedCode = COUNTRY_PT_NAMES[_norm(val)];
+    if (detectedCode) {
+      setDestinations(prev => prev.map((d, i) => i === idx
+        ? { ...d, query: val, city: '', valid: null, countryDetected: { name: val, code: detectedCode }, suggestions: [], showSuggestions: false, isSearching: false }
+        : d
+      ));
+      clearTimeout(debounceRefs.current[idx]);
+      return;
+    }
+    setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, query: val, city: val, valid: null, countryDetected: undefined } : d));
     clearTimeout(debounceRefs.current[idx]);
     if (val.length >= 2) {
       debounceRefs.current[idx] = setTimeout(() => searchCities(idx, val), 400);
@@ -192,6 +276,58 @@ export default function NewTripPage() {
       ? { ...d, city: name, country, country_code, query: name, valid: true, suggestions: [], showSuggestions: false, lat, lon }
       : d
     ));
+  };
+
+  const quickAddCity = async (baseIdx: number, cityName: string) => {
+    // Find first empty or country-detected slot at/after baseIdx, else append
+    const targetIdx = (() => {
+      for (let i = baseIdx; i < destinations.length; i++) {
+        if (!destinations[i].valid) return i;
+      }
+      return -1; // need to append
+    })();
+
+    const applyCity = (idx: number, res: CityOption[]) => {
+      const cityResults = (res as CityOption[]).filter(r => r.address?.city || r.address?.town || r.address?.village);
+      if (cityResults.length === 0) return;
+      const r = cityResults[0];
+      const name = r.address?.city || r.address?.town || r.address?.village || r.display_name.split(',')[0];
+      setDestinations(prev => {
+        const next = [...prev];
+        const entry: DestEntry = {
+          ...next[idx],
+          city: name, country: r.address?.country || '', country_code: r.address?.country_code || '',
+          query: name, valid: true, suggestions: [], showSuggestions: false, isSearching: false,
+          lat: r.lat ? parseFloat(r.lat) : undefined, lon: r.lon ? parseFloat(r.lon) : undefined,
+          countryDetected: undefined,
+        };
+        next[idx] = entry;
+        return tripDays > 0 ? distributeDaysEvenly(next, tripDays) : next;
+      });
+    };
+
+    if (targetIdx === -1) {
+      // Append new entry first
+      setDestinations(prev => {
+        const next = [...prev, { ...emptyDest(), query: cityName, isSearching: true }];
+        return next;
+      });
+    } else {
+      setDestinations(prev => prev.map((d, i) => i === targetIdx ? { ...d, query: cityName, isSearching: true, countryDetected: undefined } : d));
+    }
+
+    try {
+      const res = await axios.get('https://nominatim.openstreetmap.org/search', {
+        params: { q: cityName, format: 'json', limit: 5, addressdetails: 1 },
+        headers: { 'Accept-Language': 'pt-BR' },
+        timeout: 5000,
+      });
+      const idx = targetIdx === -1 ? destinations.length : targetIdx;
+      applyCity(idx, res.data);
+    } catch {
+      const idx = targetIdx === -1 ? destinations.length : targetIdx;
+      setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, isSearching: false } : d));
+    }
   };
 
   const tripDays = formData.start_date && formData.end_date
@@ -382,12 +518,52 @@ export default function NewTripPage() {
                       ✓ <FlagImg code={dest.country_code} size="sm" /> {dest.city}, {dest.country}
                     </p>
                   )}
-                  {dest.query.length >= 2 && !dest.isSearching && dest.suggestions.length === 0 && dest.valid === null && (
+                  {dest.countryDetected && (
+                    <div className="mt-2 ml-8 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <p className="font-semibold text-amber-800 text-sm flex items-center gap-1.5">
+                        🌍 <span>&#34;{dest.countryDetected.name}&#34; é um país, não uma cidade.</span>
+                      </p>
+                      <p className="text-amber-700 text-xs mt-1">
+                        {tripDays > 0
+                          ? `Para ${tripDays} dia${tripDays > 1 ? 's' : ''}, adicione as cidades que deseja visitar:`
+                          : 'Adicione as cidades que deseja visitar:'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {(COUNTRY_TOP_CITIES[dest.countryDetected.code] || []).map(city => (
+                          <button key={city} type="button"
+                            onClick={() => quickAddCity(idx, city)}
+                            className="text-xs bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 px-2.5 py-1.5 rounded-full font-medium transition">
+                            + {city}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {dest.query.length >= 2 && !dest.isSearching && dest.suggestions.length === 0 && dest.valid === null && !dest.countryDetected && (
                     <p className="text-amber-600 text-xs mt-1 ml-8">⚠ Nenhuma cidade encontrada</p>
                   )}
                 </div>
               ))}
             </div>
+
+            {/* Long-trip nudge: single destination with many days */}
+            {tripDays >= 8 && destinations.length === 1 && destinations[0].valid === true && (
+              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm">
+                <span className="flex-shrink-0 text-lg">🗺️</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-800">Viagem longa — que tal visitar mais cidades?</p>
+                  <p className="text-blue-700 text-xs mt-0.5">
+                    {tripDays} dias em uma única cidade pode ser muito. O ideal é {Math.ceil(tripDays / 5)}–{Math.ceil(tripDays / 4)} cidades com 4–6 dias cada.
+                  </p>
+                  {destinations.length < 5 && (
+                    <button type="button" onClick={addDestination}
+                      className="mt-2 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-full hover:bg-blue-700 font-semibold transition">
+                      + Adicionar cidade
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {cityOrderSuggestion && (
               <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
