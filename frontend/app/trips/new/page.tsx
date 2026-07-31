@@ -313,7 +313,7 @@ export default function NewTripPage() {
           city: name, country: r.address?.country || '', country_code: r.address?.country_code || '',
           query: name, valid: true, suggestions: [], showSuggestions: false, isSearching: false,
           lat: r.lat ? parseFloat(r.lat) : undefined, lon: r.lon ? parseFloat(r.lon) : undefined,
-          countryDetected: undefined,
+          // Preserve countryDetected so the banner stays visible for multi-city selection
         };
         next[idx] = entry;
         return tripDays > 0 ? distributeDaysEvenly(next, tripDays) : next;
@@ -321,13 +321,14 @@ export default function NewTripPage() {
     };
 
     if (targetIdx === -1) {
-      // Append new entry first
+      // Append new entry (the source banner slot is already valid, keep its countryDetected)
       setDestinations(prev => {
         const next = [...prev, { ...emptyDest(), query: cityName, isSearching: true }];
         return next;
       });
     } else {
-      setDestinations(prev => prev.map((d, i) => i === targetIdx ? { ...d, query: cityName, isSearching: true, countryDetected: undefined } : d));
+      // Loading state on the target slot; preserve countryDetected on source slot if different
+      setDestinations(prev => prev.map((d, i) => i === targetIdx ? { ...d, query: cityName, isSearching: true } : d));
     }
 
     try {
@@ -544,22 +545,35 @@ export default function NewTripPage() {
                   )}
                   {dest.countryDetected && (
                     <div className="mt-2 ml-8 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                      <p className="font-semibold text-amber-800 text-sm flex items-center gap-1.5">
-                        🌍 <span>&#34;{dest.countryDetected.name}&#34; é um país, não uma cidade.</span>
-                      </p>
-                      <p className="text-amber-700 text-xs mt-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-amber-800 text-sm flex items-center gap-1.5">
+                          🌍 <span>&#34;{dest.countryDetected.name}&#34; é um país — selecione as cidades:</span>
+                        </p>
+                        <button type="button"
+                          onClick={() => setDestinations(prev => prev.map((d, i) => i === idx ? { ...d, countryDetected: undefined } : d))}
+                          className="flex-shrink-0 text-amber-400 hover:text-amber-700 text-base leading-none font-bold">×</button>
+                      </div>
+                      <p className="text-amber-600 text-xs mt-1">
                         {tripDays > 0
-                          ? `Para ${tripDays} dia${tripDays > 1 ? 's' : ''}, adicione as cidades que deseja visitar:`
-                          : 'Adicione as cidades que deseja visitar:'}
+                          ? `Clique em quantas quiser para ${tripDays} dias:`
+                          : 'Clique em quantas cidades quiser:'}
                       </p>
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {(COUNTRY_TOP_CITIES[dest.countryDetected.code] || []).map(city => (
-                          <button key={city} type="button"
-                            onClick={() => quickAddCity(idx, city)}
-                            className="text-xs bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 px-2.5 py-1.5 rounded-full font-medium transition">
-                            + {city}
-                          </button>
-                        ))}
+                        {(COUNTRY_TOP_CITIES[dest.countryDetected.code] || []).map(city => {
+                          const alreadyAdded = destinations.some(d => d.valid && d.city.toLowerCase() === city.toLowerCase());
+                          return (
+                            <button key={city} type="button"
+                              onClick={() => !alreadyAdded && quickAddCity(idx, city)}
+                              disabled={alreadyAdded}
+                              className={`text-xs px-2.5 py-1.5 rounded-full font-medium transition ${
+                                alreadyAdded
+                                  ? 'bg-green-100 text-green-700 border border-green-300 cursor-default'
+                                  : 'bg-white border border-amber-300 text-amber-800 hover:bg-amber-100'
+                              }`}>
+                              {alreadyAdded ? '✓' : '+'} {city}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
