@@ -22,6 +22,7 @@ class TripUpdate(BaseModel):
     end_date: Optional[date] = None
     traveler_profile: Optional[str] = None
     day_accommodation: Optional[Dict[str, Any]] = None
+    trip_settings: Optional[Dict[str, Any]] = None
 
 class Trip(BaseModel):
     id: UUID
@@ -32,6 +33,7 @@ class Trip(BaseModel):
     end_date: date
     traveler_profile: str
     day_accommodation: Optional[Dict[str, Any]] = None
+    trip_settings: Optional[Dict[str, Any]] = None
     created_at: str
 
     class Config:

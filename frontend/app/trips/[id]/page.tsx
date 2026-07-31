@@ -338,21 +338,9 @@ export default function TripDetailPage() {
   } | null>(null);
   const [tipsLoading, setTipsLoading] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
-  const [visited, setVisited] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const saved = localStorage.getItem(`visited_${typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : ''}`);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch { return new Set(); }
-  });
+  const [visited, setVisited] = useState<Set<string>>(new Set());
   const [weatherByDate, setWeatherByDate] = useState<Record<string, { icon: string; maxC: number; minC: number; is_rainy: boolean; description: string }>>({});
-  const [dayNotes, setDayNotes] = useState<Record<number, string>>(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem(`notes_${window.location.pathname.split('/').pop()}`);
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
+  const [dayNotes, setDayNotes] = useState<Record<number, string>>({});
   const [addModalDay, setAddModalDay] = useState<number | null>(null);
   const [availableAttractions, setAvailableAttractions] = useState<Attraction[]>([]);
   const [attrSearch, setAttrSearch] = useState('');
@@ -377,39 +365,21 @@ export default function TripDetailPage() {
   const [expandedLeg, setExpandedLeg] = useState<string | null>(null);
   const [itinSearch, setItinSearch] = useState('');
   const [showCosts, setShowCosts] = useState(false);
-  const [attractionCosts, setAttractionCosts] = useState<Record<string, number>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { const s = localStorage.getItem(`costs_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
-  });
-  const [attractionHours, setAttractionHours] = useState<Record<string, { open: string; close: string; closedDays: number[] }>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { const s = localStorage.getItem(`hours_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
-  });
+  const [attractionCosts, setAttractionCosts] = useState<Record<string, number>>({});
+  const [attractionHours, setAttractionHours] = useState<Record<string, { open: string; close: string; closedDays: number[] }>>({});
   const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
-  const [attractionRatings, setAttractionRatings] = useState<Record<string, number>>(() => {
-    if (typeof window === 'undefined') return {};
-    try { const s = localStorage.getItem(`ratings_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : {}; } catch { return {}; }
-  });
+  const [attractionRatings, setAttractionRatings] = useState<Record<string, number>>({});
   const [showFinancialSummary, setShowFinancialSummary] = useState(false);
   const [accomSuggestions, setAccomSuggestions] = useState<Record<number, { name: string; address: string; lat: number; lng: number }[]>>({});
   const accomTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const geocodedDays = useRef(new Set<number>());
-  const [physicalProfiles, setPhysicalProfiles] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try { const s = localStorage.getItem(`physical_${window.location.pathname.split('/').pop()}`); return s ? JSON.parse(s) : []; } catch { return []; }
-  });
+  const [physicalProfiles, setPhysicalProfiles] = useState<string[]>([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
-  const [legTransport, setLegTransport] = useState<Record<string, string>>(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem(`leg_transport_${window.location.pathname.split('/').pop()}`);
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
+  const [legTransport, setLegTransport] = useState<Record<string, string>>({});
   const [dayAccommodation, setDayAccommodation] = useState<Record<number, { name: string; address: string; lat?: number; lng?: number }>>({});
 
   useEffect(() => {
@@ -432,6 +402,16 @@ export default function TripDetailPage() {
         );
         setTrip(tripResponse.data);
         setEditProfiles((tripResponse.data.traveler_profile || '').split(',').filter(Boolean));
+        // Load all trip settings from backend (syncs across devices)
+        const s = tripResponse.data.trip_settings || {};
+        if (s.visited_attractions?.length) setVisited(new Set(s.visited_attractions as string[]));
+        if (s.day_notes && Object.keys(s.day_notes).length) setDayNotes(s.day_notes);
+        if (s.attraction_costs && Object.keys(s.attraction_costs).length) setAttractionCosts(s.attraction_costs);
+        if (s.attraction_hours && Object.keys(s.attraction_hours).length) setAttractionHours(s.attraction_hours);
+        if (s.attraction_ratings && Object.keys(s.attraction_ratings).length) setAttractionRatings(s.attraction_ratings);
+        if (s.physical_profiles?.length) setPhysicalProfiles(s.physical_profiles as string[]);
+        if (s.leg_transport && Object.keys(s.leg_transport).length) setLegTransport(s.leg_transport);
+
         // Load hotel data from backend (syncs across devices)
         if (tripResponse.data.day_accommodation) {
           const acc: Record<number, { name: string; address: string; lat?: number; lng?: number }> = {};
@@ -465,17 +445,62 @@ export default function TripDetailPage() {
     loadTripData();
   }, [tripId, router]);
 
-  // Fallback: load accommodation from localStorage when backend has no data yet
+  // Fallback: load all settings from localStorage when backend has no data yet
   useEffect(() => {
     if (!tripId) return;
     setDayAccommodation(prev => {
-      if (Object.keys(prev).length > 0) return prev; // backend already populated state
-      try {
-        const saved = localStorage.getItem(`accommodation_${tripId}`);
-        return saved ? JSON.parse(saved) : prev;
-      } catch { return prev; }
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`accommodation_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setVisited(prev => {
+      if (prev.size > 0) return prev;
+      try { const s = localStorage.getItem(`visited_${tripId}`); return s ? new Set(JSON.parse(s)) : prev; } catch { return prev; }
+    });
+    setDayNotes(prev => {
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`notes_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setAttractionCosts(prev => {
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`costs_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setAttractionHours(prev => {
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`hours_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setAttractionRatings(prev => {
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`ratings_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setPhysicalProfiles(prev => {
+      if (prev.length > 0) return prev;
+      try { const s = localStorage.getItem(`physical_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
+    });
+    setLegTransport(prev => {
+      if (Object.keys(prev).length > 0) return prev;
+      try { const s = localStorage.getItem(`leg_transport_${tripId}`); return s ? JSON.parse(s) : prev; } catch { return prev; }
     });
   }, [tripId]);
+
+  // Debounced batch save to backend — accumulates partial keys, flushes after 800ms idle
+  const pendingSettingsRef = useRef<Record<string, unknown>>({});
+  const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSetting = (partial: Record<string, unknown>) => {
+    pendingSettingsRef.current = { ...pendingSettingsRef.current, ...partial };
+    if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
+    settingsSaveTimer.current = setTimeout(async () => {
+      if (!token || !tripId) return;
+      const payload = { ...pendingSettingsRef.current };
+      pendingSettingsRef.current = {};
+      try {
+        await axios.patch(
+          `${process.env.NEXT_PUBLIC_API_URL}/trips/${tripId}/settings`,
+          payload,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (e) { console.error('saveSetting', e); }
+    }, 800);
+  };
 
   useEffect(() => {
     if (itinerary.length === 0 || !token) return;
@@ -594,6 +619,7 @@ export default function TripDetailPage() {
     setPhysicalProfiles(prev => {
       const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
       try { localStorage.setItem(`physical_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ physical_profiles: next });
       return next;
     });
   };
@@ -693,6 +719,7 @@ export default function TripDetailPage() {
     setAttractionRatings(prev => {
       const next = { ...prev, [attrId]: rating };
       try { localStorage.setItem(`ratings_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ attraction_ratings: next });
       return next;
     });
   };
@@ -780,6 +807,7 @@ export default function TripDetailPage() {
     setAttractionCosts(prev => {
       const next = { ...prev, [attrId]: cost };
       try { localStorage.setItem(`costs_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ attraction_costs: next });
       return next;
     });
   };
@@ -788,6 +816,7 @@ export default function TripDetailPage() {
       const cur = prev[attrId] || { open: '', close: '', closedDays: [] };
       const next = { ...prev, [attrId]: { ...cur, [field]: value } };
       try { localStorage.setItem(`hours_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ attraction_hours: next });
       return next;
     });
   };
@@ -797,6 +826,7 @@ export default function TripDetailPage() {
       const days = cur.closedDays.includes(day) ? cur.closedDays.filter(d => d !== day) : [...cur.closedDays, day];
       const next = { ...prev, [attrId]: { ...cur, closedDays: days } };
       try { localStorage.setItem(`hours_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ attraction_hours: next });
       return next;
     });
   };
@@ -839,6 +869,7 @@ export default function TripDetailPage() {
     setLegTransport(prev => {
       const next = { ...prev, [legKey]: modeId };
       try { localStorage.setItem(`leg_transport_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ leg_transport: next });
       return next;
     });
   };
@@ -986,6 +1017,7 @@ export default function TripDetailPage() {
     setDayNotes(prev => {
       const next = { ...prev, [day]: text };
       try { localStorage.setItem(`notes_${tripId}`, JSON.stringify(next)); } catch {}
+      saveSetting({ day_notes: next });
       return next;
     });
   };
@@ -994,7 +1026,9 @@ export default function TripDetailPage() {
     setVisited(prev => {
       const next = new Set(prev);
       next.has(attractionId) ? next.delete(attractionId) : next.add(attractionId);
-      try { localStorage.setItem(`visited_${tripId}`, JSON.stringify(Array.from(next))); } catch {}
+      const arr = Array.from(next);
+      try { localStorage.setItem(`visited_${tripId}`, JSON.stringify(arr)); } catch {}
+      saveSetting({ visited_attractions: arr });
       return next;
     });
   };

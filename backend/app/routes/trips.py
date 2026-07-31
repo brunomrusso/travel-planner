@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status, Depends, Body
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 import uuid as _uuid
 from datetime import datetime
@@ -96,6 +96,28 @@ async def delete_trip(trip_id: UUID, user_id: str = Depends(get_user_id_from_tok
 async def _ensure_attractions_for_city(city: str, supabase) -> int:
     """Ensure at least 10 attractions exist for the city using the efficient single-query fetcher."""
     return await enrich_city_attractions(supabase, city, min_needed=10)
+
+
+@router.patch("/{trip_id}/settings")
+async def patch_trip_settings(
+    trip_id: UUID,
+    partial: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_user_id_from_token),
+):
+    """Merge partial settings into trip_settings JSONB column."""
+    supabase = get_supabase()
+    try:
+        resp = supabase.table("trips").select("trip_settings").eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        if not resp.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+        current = resp.data[0].get("trip_settings") or {}
+        merged = {**current, **partial}
+        supabase.table("trips").update({"trip_settings": merged}).eq("id", str(trip_id)).eq("user_id", user_id).execute()
+        return merged
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.patch("/{trip_id}/complete")
